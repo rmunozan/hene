@@ -1,0 +1,20 @@
+{
+  "name": "hene",
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Hene Compiler",
+  "devDependencies": {
+    "vite": "^5.0.0" 
+  },
+  "dependencies": {
+    "acorn": "^8.10.0",
+    "astring": "^1.8.6",
+    "parse5": "^7.1.2"
+  }
+}

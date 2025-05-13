@@ -1,0 +1,23 @@
+{
+	"name": "hene",
+	"version": "0.1.0",
+	"description": "Web components, but nicer (i think so)",
+	"main": "index.js",
+	"type": "module",
+	"repository": { "type": "git", "url": "https://github.com/rmunozan/hene.git" },
+	"author": "ramn",
+	"license": "MIT",
+	"bugs": { "url": "https://github.com/rmunozan/hene/issues" },
+	"homepage": "https://github.com/rmunozan/hene#readme",
+	"scripts": {
+		"test": "node --version"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"dependencies": {
+		"acorn": "^8.10.0",
+		"astring": "^1.8.6",
+		"parse5": "^7.1.2"
+	}
+}
