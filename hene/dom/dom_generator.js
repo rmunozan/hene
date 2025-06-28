@@ -7,8 +7,76 @@
  * - `generateDomASTForNode`: Recursively generates AST for individual HTML elements and text nodes.
  */
 import { parseHTMLString } from './html_parser.js';
-import { extractAndEnrichSyncExpressions, processTextForRender } from '../compiler/sync_transformer.js';
 import * as acorn from 'acorn';
+
+function collectReactiveRefs(ast, reactiveStates, found) {
+    if (!ast || typeof ast !== 'object') return;
+    switch (ast.type) {
+        case 'MemberExpression': {
+            let parts = [];
+            let cur = ast;
+            while (cur.type === 'MemberExpression') {
+                if (cur.property.type !== 'Identifier') return;
+                parts.unshift(cur.property.name);
+                cur = cur.object;
+            }
+            if (cur.type === 'ThisExpression') {
+                parts.unshift('this');
+            } else if (cur.type === 'Identifier') {
+                parts.unshift(cur.name);
+            }
+            const key = parts.join('.');
+            if (reactiveStates.has(key)) {
+                found.add(key);
+            }
+            collectReactiveRefs(ast.object, reactiveStates, found);
+            if (ast.computed) collectReactiveRefs(ast.property, reactiveStates, found);
+            break;
+        }
+        case 'CallExpression':
+            collectReactiveRefs(ast.callee, reactiveStates, found);
+            ast.arguments.forEach(arg => collectReactiveRefs(arg, reactiveStates, found));
+            break;
+        case 'BinaryExpression':
+        case 'LogicalExpression':
+        case 'AssignmentExpression':
+        case 'ConditionalExpression':
+            collectReactiveRefs(ast.left, reactiveStates, found);
+            collectReactiveRefs(ast.right, reactiveStates, found);
+            if (ast.test) collectReactiveRefs(ast.test, reactiveStates, found);
+            if (ast.consequent) collectReactiveRefs(ast.consequent, reactiveStates, found);
+            if (ast.alternate) collectReactiveRefs(ast.alternate, reactiveStates, found);
+            break;
+        case 'UnaryExpression':
+        case 'UpdateExpression':
+            collectReactiveRefs(ast.argument, reactiveStates, found);
+            break;
+        case 'ArrayExpression':
+            ast.elements.forEach(el => collectReactiveRefs(el, reactiveStates, found));
+            break;
+        case 'ObjectExpression':
+            ast.properties.forEach(p => collectReactiveRefs(p.value, reactiveStates, found));
+            break;
+        case 'TemplateLiteral':
+            ast.expressions.forEach(e => collectReactiveRefs(e, reactiveStates, found));
+            break;
+        default:
+            for (const k in ast) {
+                if (ast[k] && typeof ast[k] === 'object') collectReactiveRefs(ast[k], reactiveStates, found);
+            }
+    }
+}
+
+function reactiveRefsFromExpression(exprStr, reactiveStates) {
+    try {
+        const ast = acorn.parseExpressionAt(exprStr, 0, { ecmaVersion: 'latest' });
+        const found = new Set();
+        collectReactiveRefs(ast, reactiveStates, found);
+        return Array.from(found).map(key => reactiveStates.get(key));
+    } catch (e) {
+        return [];
+    }
+}
 
 /**
  * Creates an AST Literal or TemplateLiteral node from a string.
@@ -50,7 +118,7 @@ export function stringToAstLiteral(strValue) {
  * @param {string} html - The HTML from `$render`.
  * @returns {object} { creation_statements, nodes_assignment, sync_watchers }.
  */
-export function buildDomInstructionsAST(html) {
+export function buildDomInstructionsAST(html, reactiveStates = new Map()) {
     if (!html) return { creation_statements: [], nodes_assignment: null, sync_watchers: [] };
 
     const stmts = [];
@@ -70,7 +138,7 @@ export function buildDomInstructionsAST(html) {
     const watchers = [];
     const parsed = parseHTMLString(html);
 
-    parsed.forEach(node => generateDomASTForNode(node, `this.${rootFrag}`, stmts, idCounter, nodeMap, watchers));
+    parsed.forEach(node => generateDomASTForNode(node, `this.${rootFrag}`, stmts, idCounter, nodeMap, watchers, reactiveStates));
 
     const nodesAssign = Object.keys(nodeMap).length > 0 ? {
         type: 'ExpressionStatement',
@@ -99,7 +167,7 @@ export function buildDomInstructionsAST(html) {
  * @param {object} nodeMap - For `this.nodes` mapping.
  * @param {Array<object>} watchers - Collector for reactive watchers.
  */
-function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watchers) {
+function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watchers, reactiveStates) {
     let parentAst;
     if (parentVar.startsWith('this.')) {
         parentAst = { type: 'MemberExpression', object: {type: 'ThisExpression'}, property: {type: 'Identifier', name: parentVar.substring(5)}};
@@ -111,12 +179,12 @@ function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watch
         const text = node.content;
         const segments = [];
         let lastIdx = 0;
-        const tplRegex = /\$\{((?:[^{}]*|\{[^{}]*\})*)\}/g; // Find any ${...}
+        const tplRegex = /\$\{((?:[^{}]*|\{[^{}]*\})*)\}/g;
         let match;
 
         while ((match = tplRegex.exec(text)) !== null) {
             if (match.index > lastIdx) segments.push({ type: 'static', value: text.substring(lastIdx, match.index) });
-            segments.push({ type: match[0].includes('sync(') ? 'reactive' : 'static', value: match[0] });
+            segments.push({ type: 'expr', value: match[0] });
             lastIdx = tplRegex.lastIndex;
         }
         if (lastIdx < text.length) segments.push({ type: 'static', value: text.substring(lastIdx) });
@@ -137,17 +205,15 @@ function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watch
         finalSegs.forEach(seg => {
             if (seg.value === '') return;
             const textVar = `_text${idCounter.count++}`;
-            let initValNode, isDyn = false, relSyncs = [], textToRender = '';
+            let initValNode, isDyn = false, refs = [];
 
             if (seg.type === 'static') {
                 initValNode = stringToAstLiteral(seg.value);
-            } else { // reactive
-                const syncsInExpr = extractAndEnrichSyncExpressions(seg.value);
-                const procInfo = processTextForRender(seg.value, syncsInExpr)[0];
-                initValNode = stringToAstLiteral(procInfo.textForRender);
-                textToRender = procInfo.textForRender;
-                isDyn = procInfo.isDynamic;
-                if (isDyn) relSyncs = procInfo.relevantSyncs;
+            } else {
+                initValNode = stringToAstLiteral(seg.value);
+                const expr = seg.value.slice(2, -1);
+                refs = reactiveRefsFromExpression(expr, reactiveStates);
+                if (refs.length > 0) isDyn = true;
             }
 
             stmts.push({
@@ -160,10 +226,10 @@ function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watch
                 type: 'ExpressionStatement', expression: { type: 'CallExpression', callee: { type: 'MemberExpression', object: parentAst, property: { type: 'Identifier', name: 'appendChild' }, computed: false }, arguments: [{ type: 'Identifier', name: textVar }] }
             });
 
-            if (isDyn && relSyncs.length > 0) {
-                const uniqueTargets = new Map();
-                relSyncs.forEach(sync => uniqueTargets.set(JSON.stringify(sync.syncTargetAST), sync.syncTargetAST));
-                uniqueTargets.forEach(targetAST => watchers.push({ textNodeVar: textVar, syncTargetAST: targetAST, fullExpression: textToRender }));
+            if (isDyn && refs.length > 0) {
+                const unique = new Map();
+                refs.forEach(ast => unique.set(JSON.stringify(ast), ast));
+                unique.forEach(ast => watchers.push({ textNodeVar: textVar, syncTargetAST: ast, fullExpression: seg.value }));
             }
         });
         return;
@@ -184,16 +250,25 @@ function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watch
                     nodeMap[attrVal] = elVar;
                     continue;
                 }
-                const syncsInAttr = extractAndEnrichSyncExpressions(attrVal);
-                const procInfo = processTextForRender(attrVal, syncsInAttr)[0];
+                const refs = [];
+                const attrRegex = /\$\{((?:[^{}]*|\{[^{}]*\})*)\}/g;
+                let m;
+                while ((m = attrRegex.exec(attrVal)) !== null) {
+                    refs.push(...reactiveRefsFromExpression(m[1], reactiveStates));
+                }
                 stmts.push({
-                    type: 'ExpressionStatement', expression: { type: 'CallExpression', callee: { type: 'MemberExpression', object: { type: 'Identifier', name: elVar }, property: { type: 'Identifier', name: 'setAttribute' }, computed: false }, arguments: [ { type: 'Literal', value: attrName }, stringToAstLiteral(procInfo.textForRender) ] }
+                    type: 'ExpressionStatement',
+                    expression: {
+                        type: 'CallExpression',
+                        callee: { type: 'MemberExpression', object: { type: 'Identifier', name: elVar }, property: { type: 'Identifier', name: 'setAttribute' }, computed: false },
+                        arguments: [ { type: 'Literal', value: attrName }, stringToAstLiteral(attrVal) ]
+                    }
                 });
 
-                if (procInfo.isDynamic && procInfo.relevantSyncs) {
-                    const uniqueTargets = new Map();
-                    procInfo.relevantSyncs.forEach(sync => uniqueTargets.set(JSON.stringify(sync.syncTargetAST), sync.syncTargetAST));
-                    uniqueTargets.forEach(targetAST => watchers.push({ elementVar: elVar, attributeName: attrName, syncTargetAST: targetAST, fullExpression: procInfo.textForRender }));
+                if (refs.length > 0) {
+                    const unique = new Map();
+                    refs.forEach(ast => unique.set(JSON.stringify(ast), ast));
+                    unique.forEach(ast => watchers.push({ elementVar: elVar, attributeName: attrName, syncTargetAST: ast, fullExpression: attrVal }));
                 }
             }
         }
@@ -202,7 +277,7 @@ function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watch
         });
 
         if (node.children) {
-            node.children.forEach(child => generateDomASTForNode(child, elVar, stmts, idCounter, nodeMap, watchers));
+            node.children.forEach(child => generateDomASTForNode(child, elVar, stmts, idCounter, nodeMap, watchers, reactiveStates));
         }
     }
 }

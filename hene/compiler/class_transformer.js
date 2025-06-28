@@ -189,6 +189,89 @@ export function transformHeneClassAST(classNode) {
     const disconnectedCb = ensureDisconnectedCallback(classBodyMembers);
     const ctorBody = ctor.value.body.body;
 
+    // Collect properties initialized via $state() for reactive tracking
+    const reactiveStates = new Map();
+
+    function makeMemberAst(parts) {
+        let expr = parts[0] === 'this'
+            ? { type: 'ThisExpression' }
+            : { type: 'Identifier', name: parts[0] };
+        for (let i = 1; i < parts.length; i++) {
+            expr = {
+                type: 'MemberExpression',
+                object: expr,
+                property: { type: 'Identifier', name: parts[i] },
+                computed: false
+            };
+        }
+        return expr;
+    }
+
+    function recordState(pathParts) {
+        const key = pathParts.join('.');
+        if (!reactiveStates.has(key)) {
+            reactiveStates.set(key, makeMemberAst(pathParts));
+        }
+    }
+
+    function collectFromObject(objExpr, baseParts) {
+        for (const prop of objExpr.properties || []) {
+            if (prop.type !== 'Property' || prop.key.type !== 'Identifier') continue;
+            const val = prop.value;
+            const newParts = baseParts.concat(prop.key.name);
+            if (val.type === 'CallExpression' && val.callee.type === 'Identifier' && val.callee.name === '$state') {
+                recordState(newParts);
+            } else if (val.type === 'ObjectExpression') {
+                collectFromObject(val, newParts);
+            }
+        }
+    }
+
+    function inspectAssignment(left, right) {
+        if (left.type !== 'MemberExpression') return;
+        const parts = [];
+        let cur = left;
+        while (cur.type === 'MemberExpression') {
+            if (cur.property.type !== 'Identifier') return;
+            parts.unshift(cur.property.name);
+            cur = cur.object;
+        }
+        if (cur.type === 'ThisExpression') {
+            parts.unshift('this');
+        } else if (cur.type === 'Identifier') {
+            parts.unshift(cur.name);
+        } else {
+            return;
+        }
+
+        if (right.type === 'CallExpression' && right.callee.type === 'Identifier' && right.callee.name === '$state') {
+            recordState(parts);
+        } else if (right.type === 'ObjectExpression') {
+            collectFromObject(right, parts);
+        }
+    }
+
+    // Check class property definitions for $state
+    for (const member of classBodyMembers) {
+        if (member.type === 'PropertyDefinition' && member.value) {
+            if (member.key.type !== 'Identifier') continue;
+            const base = ['this', member.key.name];
+            const val = member.value;
+            if (val.type === 'CallExpression' && val.callee.type === 'Identifier' && val.callee.name === '$state') {
+                recordState(base);
+            } else if (val.type === 'ObjectExpression') {
+                collectFromObject(val, base);
+            }
+        }
+    }
+
+    // Inspect constructor assignments
+    for (const stmt of ctorBody) {
+        if (stmt.type === 'ExpressionStatement' && stmt.expression.type === 'AssignmentExpression' && stmt.expression.operator === '=') {
+            inspectAssignment(stmt.expression.left, stmt.expression.right);
+        }
+    }
+
     let builtIdx = -1;
     for (let i = 0; i < ctorBody.length; i++) {
         const stmt = ctorBody[i];
@@ -218,7 +301,7 @@ export function transformHeneClassAST(classNode) {
     let unwatcherVarNames = [];
 
     if (renderHTML) {
-        const { creation_statements, nodes_assignment, sync_watchers } = buildDomInstructionsAST(renderHTML);
+        const { creation_statements, nodes_assignment, sync_watchers } = buildDomInstructionsAST(renderHTML, reactiveStates);
         buildMethodStmts.push(...creation_statements);
         if (nodes_assignment) buildMethodStmts.push(nodes_assignment);
 
