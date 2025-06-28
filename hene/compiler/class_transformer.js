@@ -27,7 +27,7 @@ import * as acorn from 'acorn';
  * @param {object} eventIdCounter - Counter for unique event handler names, e.g., { count: 0 }.
  * @param {Array<Object>} hoistedHandlerStmts - Array to collect AST for hoisted handler assignments.
  */
-function process$EventListeners(classMembers, constructorNode, disconnectedCbNode, eventIdCounter, hoistedHandlerStmts) {
+function process$EventListeners(classMembers, constructorNode, disconnectedCbNode, eventIdCounter, hoistedHandlerStmts, ctorEventStmts = []) {
     const collectedEventListeners = [];
 
     for (const memberNode of classMembers) {
@@ -95,7 +95,7 @@ function process$EventListeners(classMembers, constructorNode, disconnectedCbNod
                      // console.warn(`[Hene] $event listener may not be stable for removal: ${generate(listenerAST)}`);
                 }
 
-                bodyStmts[i] = {
+                const addEvtStmt = {
                     type: 'ExpressionStatement',
                     expression: {
                         type: 'CallExpression',
@@ -113,6 +113,13 @@ function process$EventListeners(classMembers, constructorNode, disconnectedCbNod
                         optional: false
                     }
                 };
+
+                if (bodyStmts === constructorNode.value.body.body) {
+                    ctorEventStmts.push(addEvtStmt);
+                    bodyStmts.splice(i, 1);
+                } else {
+                    bodyStmts[i] = addEvtStmt;
+                }
 
                 let removeOptsAST = { type: 'Literal', value: false };
                  if (optionsAST) {
@@ -202,14 +209,18 @@ export function transformHeneClassAST(classNode) {
         }
     }
 
-    const ctorInsertStmts = [];
+    if (builtIdx !== -1) {
+        ctorBody.splice(builtIdx, 1);
+    }
+
+    const buildMethodStmts = [];
     const renderHTML = extractRenderHTML(classBodyMembers);
     let unwatcherVarNames = [];
 
     if (renderHTML) {
         const { creation_statements, nodes_assignment, sync_watchers } = buildDomInstructionsAST(renderHTML);
-        ctorInsertStmts.push(...creation_statements);
-        if (nodes_assignment) ctorInsertStmts.push(nodes_assignment);
+        buildMethodStmts.push(...creation_statements);
+        if (nodes_assignment) buildMethodStmts.push(nodes_assignment);
 
         const syncWatcherAsts = [];
         if (sync_watchers && sync_watchers.length > 0) {
@@ -272,7 +283,7 @@ export function transformHeneClassAST(classNode) {
                 });
             });
         }
-        ctorInsertStmts.push(...syncWatcherAsts);
+        buildMethodStmts.push(...syncWatcherAsts);
 
         connectedCb.value.body.body.push({
             type: 'ExpressionStatement',
@@ -296,35 +307,53 @@ export function transformHeneClassAST(classNode) {
     }
 
     const hoistedEvHandlers = [];
+    const ctorEventStmts = [];
     let evCounter = { count: 0 };
     // Use currentClassBodyMembers which includes any ensure* created methods
-    process$EventListeners(classNode.body.body, ctor, disconnectedCb, evCounter, hoistedEvHandlers);
+    process$EventListeners(classNode.body.body, ctor, disconnectedCb, evCounter, hoistedEvHandlers, ctorEventStmts);
 
-    let insertIdxForHandlers = 0;
-    if (renderHTML && ctorInsertStmts.length > 0) {
-        const nodesAssignIdx = ctorInsertStmts.findIndex(stmt =>
-             stmt.type === 'ExpressionStatement' &&
-             stmt.expression.type === 'AssignmentExpression' &&
-             stmt.expression.left.type === 'MemberExpression' &&
-             stmt.expression.left.object.type === 'ThisExpression' &&
-             stmt.expression.left.property.name === 'nodes'
-        );
-        if (nodesAssignIdx !== -1) {
-            insertIdxForHandlers = nodesAssignIdx + 1;
-        } else {
-            // Fallback: insert after DOM var declarations and append calls
-            insertIdxForHandlers = ctorInsertStmts.filter(stmt =>
-                stmt.type === 'VariableDeclaration' ||
-                (stmt.type === 'ExpressionStatement' && stmt.expression.type === 'CallExpression' && stmt.expression.callee.property?.name === 'appendChild')
-            ).length;
-        }
-    }
-    ctorInsertStmts.splice(insertIdxForHandlers, 0, ...hoistedEvHandlers);
+    ctorBody.push(...hoistedEvHandlers);
 
-    if (builtIdx !== -1) {
-        ctorBody.splice(builtIdx, 1, ...ctorInsertStmts);
-    } else {
-        ctorBody.push(...ctorInsertStmts);
+    if (buildMethodStmts.length > 0 || ctorEventStmts.length > 0) {
+        classBodyMembers.push({
+            type: 'MethodDefinition',
+            kind: 'method',
+            static: false,
+            computed: false,
+            key: { type: 'Identifier', name: '__build' },
+            value: {
+                type: 'FunctionExpression',
+                id: null,
+                params: [],
+                body: { type: 'BlockStatement', body: [...buildMethodStmts, ...ctorEventStmts] },
+                async: false,
+                generator: false,
+                expression: false
+            }
+        });
+
+        ctorBody.unshift({
+            type: 'ExpressionStatement',
+            expression: {
+                type: 'AssignmentExpression',
+                operator: '=',
+                left: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__built' }, computed: false },
+                right: { type: 'Literal', value: false }
+            }
+        });
+
+        connectedCb.value.body.body.unshift({
+            type: 'IfStatement',
+            test: { type: 'UnaryExpression', operator: '!', prefix: true, argument: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__built' }, computed: false } },
+            consequent: {
+                type: 'BlockStatement',
+                body: [
+                    { type: 'ExpressionStatement', expression: { type: 'CallExpression', callee: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__build' }, computed: false }, arguments: [] } },
+                    { type: 'ExpressionStatement', expression: { type: 'AssignmentExpression', operator: '=', left: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__built' }, computed: false }, right: { type: 'Literal', value: true } } }
+                ]
+            },
+            alternate: null
+        });
     }
 
     prependSuperCall(ctor);

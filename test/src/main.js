@@ -1,11 +1,10 @@
 import { $state } from "hene/runtime";
 
 class counter extends HeneElement {
-	constructor() {
-		this.count = $state(0);
-		this.$built();
-		this.nodes.btn.$event("click", this.increase);
-	}
+        constructor() {
+                this.count = $state(0);
+                this.nodes.btn.$event("click", this.increase);
+        }
 
 	increase = () => this.count.set(this.count.get() + 1);
 
