@@ -19,7 +19,10 @@ import { generate } from 'astring';
 import { processEventListeners } from "./events.js";
 import * as acorn from 'acorn';
 
- * Transforms HeneElement class AST: re-parents to HTMLElement, processes `$render`, and handles `$event` calls.
+/**
+ * Transforms `HeneElement` class AST: re-parents to `HTMLElement`, processes
+ * `$render`, and handles `$event` calls.
+ *
  * @param {object} classNode - The class declaration AST node.
  */
 export function transformHeneClassAST(classNode) {

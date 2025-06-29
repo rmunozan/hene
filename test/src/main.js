@@ -1,4 +1,4 @@
-import { $state } from "hene";
+import { $state } from "../../hene/index.js";
 
 class counter extends HeneElement {
         constructor() {

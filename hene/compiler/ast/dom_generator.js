@@ -1,4 +1,4 @@
-// hene/dom/dom_generator.js
+// hene/compiler/ast/dom_generator.js
 /**
  * @fileoverview Generates AST for DOM creation and manipulation.
  * - `stringToAstLiteral`: Converts strings (potentially template literals) to AST literal nodes.
