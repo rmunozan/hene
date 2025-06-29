@@ -149,3 +149,48 @@ export function ensureDisconnectedCallback(classBody) {
     return cb;
 }
 
+/**
+ * Builds a member expression AST from a list of property names.
+ *
+ * @param {string[]} parts - e.g. ['this', 'nodes', 'btn']
+ * @returns {object} MemberExpression AST node.
+ */
+export function makeMemberAst(parts) {
+    let expr = parts[0] === 'this'
+        ? { type: 'ThisExpression' }
+        : { type: 'Identifier', name: parts[0] };
+    for (let i = 1; i < parts.length; i++) {
+        expr = {
+            type: 'MemberExpression',
+            object: expr,
+            property: { type: 'Identifier', name: parts[i] },
+            computed: false
+        };
+    }
+    return expr;
+}
+
+/**
+ * Derives the property chain from a MemberExpression.
+ *
+ * @param {object} member - MemberExpression AST.
+ * @returns {string[]|null} Array like ['this', 'foo', 'bar'] or null.
+ */
+export function partsFromMember(member) {
+    const p = [];
+    let cur = member;
+    while (cur && cur.type === 'MemberExpression') {
+        if (cur.property.type !== 'Identifier') return null;
+        p.unshift(cur.property.name);
+        cur = cur.object;
+    }
+    if (cur && cur.type === 'ThisExpression') {
+        p.unshift('this');
+    } else if (cur && cur.type === 'Identifier') {
+        p.unshift(cur.name);
+    } else {
+        return null;
+    }
+    return p;
+}
+
