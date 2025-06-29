@@ -3,6 +3,7 @@
  * @fileoverview Event-related transforms for Hene.
  * Provides utilities for handling `$event` calls within component classes.
  */
+import { heneError } from '../errors.js';
 
 /**
  * Processes `$event` calls in class members, hoists inline listeners,

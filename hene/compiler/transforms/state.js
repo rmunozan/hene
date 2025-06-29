@@ -5,7 +5,8 @@
  */
 import * as acorn from 'acorn';
 import { generate } from 'astring';
-import { makeMemberAst, partsFromMember, heneError } from './utils.js';
+import { makeMemberAst, partsFromMember } from './utils.js';
+import { heneError } from '../errors.js';
 import { stringToAstLiteral } from '../ast/dom_generator.js';
 
 /**

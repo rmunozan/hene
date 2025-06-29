@@ -3,7 +3,8 @@
  * @fileoverview Utilities for handling `$node` references within
  * Hene component classes.
  */
-import { makeMemberAst, partsFromMember, heneError } from './utils.js';
+import { makeMemberAst, partsFromMember } from './utils.js';
+import { heneError } from '../errors.js';
 
 /**
  * Create a tracker object for node references.

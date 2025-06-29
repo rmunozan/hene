@@ -8,7 +8,9 @@ function heneCompiler() {
     transform(code, id) {
       if (!/\.[jt]sx?$/.test(id)) return null;
       if (!code.includes('HeneElement')) return null;
-      return { code: compile(code), map: null };
+      const out = compile(code);
+      console.log('\nCompiled output for', id, '\n', out);
+      return { code: out, map: null };
     }
   };
 }

@@ -13,9 +13,9 @@ import {
     ensureConnectedCallback,
     prependSuperCall,
     ensureDisconnectedCallback,
-    heneError,
     partsFromMember
 } from './utils.js';
+import { heneError } from '../errors.js';
 import { processEventListeners } from './events.js';
 import { createNodeTracker, collectNodesFromObject, hasNodeCall, containsNodeRef, inspectNodeAssignment } from './node.js';
 import { createStateMap, collectStatesFromObject, inspectStateAssignment, recordState, buildStateWatchers } from './state.js';

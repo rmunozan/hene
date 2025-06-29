@@ -6,7 +6,7 @@
 import * as acorn from 'acorn';
 import { generate } from 'astring';
 import runPipeline from './pipeline.js';
-import { reportError } from './transforms/utils.js';
+import { reportError } from './errors.js';
 
 /**
  * Compile Hene source code.
