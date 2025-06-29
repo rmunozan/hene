@@ -1,4 +1,4 @@
-// hene/compiler/sync_transformer.js
+// hene/compiler/transforms/dom.js
 /**
  * @fileoverview Utilities for processing `sync()` expressions.
  * - `extractAndEnrichSyncExpressions`: Parses `sync(STATE_INSTANCE)` calls from strings.

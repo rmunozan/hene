@@ -1,4 +1,4 @@
-import { $state } from "hene/runtime";
+import { $state } from "hene";
 
 class counter extends HeneElement {
         constructor() {
