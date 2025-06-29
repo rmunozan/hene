@@ -28,6 +28,17 @@ import { generate } from 'astring';
  */
 function process$EventListeners(classMembers, constructorNode, connectedCbNode, disconnectedCbNode, eventIdCounter, hoistedHandlerStmts) {
     const collectedEventListeners = [];
+    const classMethodNames = new Set();
+    for (const m of classMembers) {
+        if (
+            m.type === 'MethodDefinition' &&
+            m.key?.type === 'Identifier' &&
+            m.kind === 'method' &&
+            !m.static
+        ) {
+            classMethodNames.add(m.key.name);
+        }
+    }
 
     for (const memberNode of classMembers) {
         let bodyStmts = null;
@@ -67,7 +78,52 @@ function process$EventListeners(classMembers, constructorNode, connectedCbNode, 
                 let hoistedName = null;
 
                 if (
-                    (listenerAST.type === 'ArrowFunctionExpression' || listenerAST.type === 'FunctionExpression')
+                    listenerAST.type === 'MemberExpression' &&
+                    listenerAST.object.type === 'ThisExpression' &&
+                    listenerAST.property.type === 'Identifier' &&
+                    classMethodNames.has(listenerAST.property.name)
+                ) {
+                    hoistedName = `_hene_eventHandler_${eventIdCounter.count++}`;
+                    hoistedHandlerStmts.push({
+                        type: 'ExpressionStatement',
+                        expression: {
+                            type: 'AssignmentExpression',
+                            operator: '=',
+                            left: {
+                                type: 'MemberExpression',
+                                object: { type: 'ThisExpression' },
+                                property: { type: 'Identifier', name: hoistedName },
+                                computed: false
+                            },
+                            right: {
+                                type: 'ArrowFunctionExpression',
+                                id: null,
+                                params: [{ type: 'Identifier', name: 'e' }],
+                                body: {
+                                    type: 'CallExpression',
+                                    callee: {
+                                        type: 'MemberExpression',
+                                        object: { type: 'ThisExpression' },
+                                        property: { type: 'Identifier', name: listenerAST.property.name },
+                                        computed: false
+                                    },
+                                    arguments: [{ type: 'Identifier', name: 'e' }],
+                                    optional: false
+                                },
+                                async: false,
+                                expression: true
+                            }
+                        }
+                    });
+                    finalListenerAST = {
+                        type: 'MemberExpression',
+                        object: { type: 'ThisExpression' },
+                        property: { type: 'Identifier', name: hoistedName },
+                        computed: false
+                    };
+                } else if (
+                    listenerAST.type === 'ArrowFunctionExpression' ||
+                    listenerAST.type === 'FunctionExpression'
                 ) {
                     hoistedName = `_hene_eventHandler_${eventIdCounter.count++}`;
                     hoistedHandlerStmts.push({
