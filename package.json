@@ -3,7 +3,8 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "dev": "vite"
+    "dev": "vite",
+    "test": "node --version"
   },
   "keywords": [],
   "author": "",

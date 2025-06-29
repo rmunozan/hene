@@ -39,7 +39,7 @@ export function collectNodesFromObject(objExpr, baseParts, tracker) {
         const newParts = baseParts.concat(prop.key.name);
         if (val.type === 'CallExpression' && val.callee.type === 'Identifier' && val.callee.name === '$node') {
             const arg = val.arguments && val.arguments[0];
-            if (!arg || arg.type !== 'Literal') throw heneError('() requires a string literal');
+            if (!arg || arg.type !== 'Literal') throw heneError('$node() requires a string literal');
             recordNodeRef(arg.value, newParts, tracker);
             prop.value = { type: 'Literal', value: null };
         } else if (val.type === 'ObjectExpression') {
@@ -101,7 +101,7 @@ export function inspectNodeAssignment(assignExpr, tracker) {
     if (!parts) return null;
     if (right.type === 'CallExpression' && right.callee.type === 'Identifier' && right.callee.name === '$node') {
         const arg = right.arguments && right.arguments[0];
-        if (!arg || arg.type !== 'Literal') throw heneError('() requires a string literal');
+        if (!arg || arg.type !== 'Literal') throw heneError('$node() requires a string literal');
         recordNodeRef(arg.value, parts, tracker);
         assignExpr.right = { type: 'Literal', value: null };
         return parts;

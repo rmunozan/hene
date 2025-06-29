@@ -61,7 +61,7 @@ export function transformHeneClassAST(classNode) {
     for (const member of classBodyMembers) {
         if (member === ctor) continue;
         if (hasNodeCall(member)) {
-            throw heneError('() can only be used inside the constructor');
+            throw heneError('$node() can only be used inside the constructor');
         }
     }
 
@@ -76,6 +76,16 @@ export function transformHeneClassAST(classNode) {
     }
 
     for (const stmt of ctorBody) {
+        if (
+            stmt.type === 'ExpressionStatement' &&
+            stmt.expression.type === 'AssignmentExpression' &&
+            stmt.expression.operator === '=' &&
+            stmt.expression.right.type === 'Literal' &&
+            stmt.expression.right.value === null
+        ) {
+            const parts = partsFromMember(stmt.expression.left);
+            if (parts && nodeTracker.paths.has(parts.join('.'))) continue;
+        }
         if (containsNodeRef(stmt, nodeTracker)) {
             throw heneError('Cached nodes cannot be used inside the constructor');
         }
