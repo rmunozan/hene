@@ -16,6 +16,7 @@ import {
 } from './utils.js';
 import { buildDomInstructionsAST, stringToAstLiteral } from '../dom/dom_generator.js';
 import { generate } from 'astring';
+import * as acorn from 'acorn';
 
 /**
  * Processes `$event` calls in class members, hoists inline listeners,
@@ -83,7 +84,7 @@ function process$EventListeners(classMembers, constructorNode, connectedCbNode, 
                     listenerAST.property.type === 'Identifier' &&
                     classMethodNames.has(listenerAST.property.name)
                 ) {
-                    hoistedName = `_hene_eventHandler_${eventIdCounter.count++}`;
+                    hoistedName = `_e${eventIdCounter.count++}`;
                     hoistedHandlerStmts.push({
                         type: 'ExpressionStatement',
                         expression: {
@@ -125,7 +126,7 @@ function process$EventListeners(classMembers, constructorNode, connectedCbNode, 
                     listenerAST.type === 'ArrowFunctionExpression' ||
                     listenerAST.type === 'FunctionExpression'
                 ) {
-                    hoistedName = `_hene_eventHandler_${eventIdCounter.count++}`;
+                    hoistedName = `_e${eventIdCounter.count++}`;
                     hoistedHandlerStmts.push({
                         type: 'ExpressionStatement',
                         expression: {
@@ -456,8 +457,18 @@ export function transformHeneClassAST(classNode) {
         buildMethodStmts.push(...creation_statements);
         Object.entries(node_map).forEach(([name, varName]) => {
             const refs = nodeRefs.get(name);
-            if (refs) {
-                refs.forEach(ast => {
+            if (!refs) return;
+            const declIdx = buildMethodStmts.findIndex(s => s.type === 'VariableDeclaration' && s.declarations[0].id.name === varName);
+            refs.forEach((ast, idx) => {
+                if (idx === 0 && declIdx >= 0 && ast.type === 'MemberExpression' && ast.object.type === 'ThisExpression') {
+                    const init = buildMethodStmts[declIdx].declarations[0].init;
+                    buildMethodStmts[declIdx].declarations[0].init = {
+                        type: 'AssignmentExpression',
+                        operator: '=',
+                        left: ast,
+                        right: init
+                    };
+                } else {
                     buildMethodStmts.push({
                         type: 'ExpressionStatement',
                         expression: {
@@ -467,8 +478,8 @@ export function transformHeneClassAST(classNode) {
                             right: { type: 'Identifier', name: varName }
                         }
                     });
-                });
-            }
+                }
+            });
         });
 
         const syncWatcherAsts = [];
@@ -489,17 +500,29 @@ export function transformHeneClassAST(classNode) {
 
             let groupIdx = 0;
             grouped.forEach((groupData) => {
-                const unwatchName = `_unwatchSync${groupIdx++}`;
+                const unwatchName = `_w${groupIdx++}`;
                 unwatcherVarNames.push(unwatchName);
 
                 const updateStmts = groupData.updates.map(upd => {
                     if (upd.type === 'text') {
+                        let expr = upd.expr;
+                        let rhs;
+                        if (expr.startsWith('${') && expr.endsWith('}')) {
+                            try {
+                                rhs = acorn.parseExpressionAt(expr.slice(2, -1), 0, { ecmaVersion: 'latest' });
+                            } catch {
+                                rhs = stringToAstLiteral(expr);
+                            }
+                        } else {
+                            rhs = stringToAstLiteral(expr);
+                        }
                         return {
                             type: 'ExpressionStatement',
                             expression: {
-                                type: 'AssignmentExpression', operator: '=',
+                                type: 'AssignmentExpression',
+                                operator: '=',
                                 left: { type: 'MemberExpression', object: { type: 'Identifier', name: upd.target }, property: { type: 'Identifier', name: 'textContent' }, computed: false },
-                                right: stringToAstLiteral(upd.expr)
+                                right: rhs
                             }
                         };
                     } else if (upd.type === 'attr') {
@@ -539,7 +562,7 @@ export function transformHeneClassAST(classNode) {
             expression: {
                 type: 'CallExpression',
                 callee: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: 'appendChild' }, computed: false },
-                arguments: [{ type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '_fragment_root' }, computed: false }]
+                arguments: [{ type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '_root' }, computed: false }]
             }
         });
 
