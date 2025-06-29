@@ -16,7 +16,6 @@ import {
 } from './utils.js';
 import { buildDomInstructionsAST, stringToAstLiteral } from '../dom/dom_generator.js';
 import { generate } from 'astring';
-import * as acorn from 'acorn';
 
 /**
  * Processes `$event` calls in class members, hoists inline listeners,
@@ -27,7 +26,7 @@ import * as acorn from 'acorn';
  * @param {object} eventIdCounter - Counter for unique event handler names, e.g., { count: 0 }.
  * @param {Array<Object>} hoistedHandlerStmts - Array to collect AST for hoisted handler assignments.
  */
-function process$EventListeners(classMembers, constructorNode, disconnectedCbNode, eventIdCounter, hoistedHandlerStmts, ctorEventStmts = []) {
+function process$EventListeners(classMembers, constructorNode, connectedCbNode, disconnectedCbNode, eventIdCounter, hoistedHandlerStmts) {
     const collectedEventListeners = [];
 
     for (const memberNode of classMembers) {
@@ -114,12 +113,10 @@ function process$EventListeners(classMembers, constructorNode, disconnectedCbNod
                     }
                 };
 
-                if (bodyStmts === constructorNode.value.body.body) {
-                    ctorEventStmts.push(addEvtStmt);
-                    bodyStmts.splice(i, 1);
-                } else {
-                    bodyStmts[i] = addEvtStmt;
+                if (bodyStmts !== connectedCbNode.value.body.body) {
+                    throw new Error('$event() can only be used inside connectedCallback');
                 }
+                bodyStmts[i] = addEvtStmt;
 
                 let removeOptsAST = { type: 'Literal', value: false };
                  if (optionsAST) {
@@ -191,6 +188,8 @@ export function transformHeneClassAST(classNode) {
 
     // Collect properties initialized via $state() for reactive tracking
     const reactiveStates = new Map();
+    const nodeRefs = new Map();
+    const nodeRefPaths = new Set();
 
     function makeMemberAst(parts) {
         let expr = parts[0] === 'this'
@@ -205,6 +204,24 @@ export function transformHeneClassAST(classNode) {
             };
         }
         return expr;
+    }
+
+    function partsFromMember(member) {
+        const p = [];
+        let cur = member;
+        while (cur && cur.type === 'MemberExpression') {
+            if (cur.property.type !== 'Identifier') return null;
+            p.unshift(cur.property.name);
+            cur = cur.object;
+        }
+        if (cur && cur.type === 'ThisExpression') {
+            p.unshift('this');
+        } else if (cur && cur.type === 'Identifier') {
+            p.unshift(cur.name);
+        } else {
+            return null;
+        }
+        return p;
     }
 
     function recordState(pathParts) {
@@ -225,9 +242,61 @@ export function transformHeneClassAST(classNode) {
                 collectFromObject(val, newParts);
             }
         }
+        collectNodesFromObject(objExpr, baseParts);
     }
 
-    function inspectAssignment(left, right) {
+    function recordNodeRef(nodeName, parts) {
+        if (!nodeRefs.has(nodeName)) nodeRefs.set(nodeName, []);
+        nodeRefs.get(nodeName).push(makeMemberAst(parts));
+        nodeRefPaths.add(parts.join('.'));
+    }
+
+    function collectNodesFromObject(objExpr, baseParts) {
+        for (const prop of objExpr.properties || []) {
+            if (prop.type !== 'Property' || prop.key.type !== 'Identifier') continue;
+            const val = prop.value;
+            const newParts = baseParts.concat(prop.key.name);
+            if (val.type === 'CallExpression' && val.callee.type === 'Identifier' && val.callee.name === '$node') {
+                const arg = val.arguments && val.arguments[0];
+                if (!arg || arg.type !== 'Literal') throw new Error('[Hene] $node() requires a string literal');
+                recordNodeRef(arg.value, newParts);
+                prop.value = { type: 'Literal', value: null };
+            } else if (val.type === 'ObjectExpression') {
+                collectNodesFromObject(val, newParts);
+            }
+        }
+    }
+
+    function hasNodeCall(ast) {
+        if (!ast || typeof ast !== 'object') return false;
+        if (ast.type === 'CallExpression' && ast.callee.type === 'Identifier' && ast.callee.name === '$node') {
+            return true;
+        }
+        for (const k in ast) {
+            const v = ast[k];
+            if (Array.isArray(v)) { if (v.some(e => hasNodeCall(e))) return true; }
+            else if (v && typeof v === 'object') { if (hasNodeCall(v)) return true; }
+        }
+        return false;
+    }
+
+    function containsNodeRef(ast) {
+        if (!ast || typeof ast !== 'object') return false;
+        if (ast.type === 'MemberExpression') {
+            const parts = partsFromMember(ast);
+            if (parts && nodeRefPaths.has(parts.join('.'))) return true;
+        }
+        for (const k in ast) {
+            const v = ast[k];
+            if (Array.isArray(v)) { if (v.some(e => containsNodeRef(e))) return true; }
+            else if (v && typeof v === 'object') { if (containsNodeRef(v)) return true; }
+        }
+        return false;
+    }
+
+    function inspectAssignment(assignExpr) {
+        const left = assignExpr.left;
+        const right = assignExpr.right;
         if (left.type !== 'MemberExpression') return;
         const parts = [];
         let cur = left;
@@ -246,8 +315,14 @@ export function transformHeneClassAST(classNode) {
 
         if (right.type === 'CallExpression' && right.callee.type === 'Identifier' && right.callee.name === '$state') {
             recordState(parts);
+        } else if (right.type === 'CallExpression' && right.callee.type === 'Identifier' && right.callee.name === '$node') {
+            const arg = right.arguments && right.arguments[0];
+            if (!arg || arg.type !== 'Literal') throw new Error('[Hene] $node() requires a string literal');
+            recordNodeRef(arg.value, parts);
+            assignExpr.right = { type: 'Literal', value: null };
         } else if (right.type === 'ObjectExpression') {
             collectFromObject(right, parts);
+            collectNodesFromObject(right, parts);
         }
     }
 
@@ -265,10 +340,30 @@ export function transformHeneClassAST(classNode) {
         }
     }
 
-    // Inspect constructor assignments
+    for (const member of classBodyMembers) {
+        if (member === ctor) continue;
+        if (hasNodeCall(member)) {
+            throw new Error('[Hene] $node() can only be used inside the constructor');
+        }
+    }
+
+    // Inspect constructor assignments and collect node references
     for (const stmt of ctorBody) {
         if (stmt.type === 'ExpressionStatement' && stmt.expression.type === 'AssignmentExpression' && stmt.expression.operator === '=') {
-            inspectAssignment(stmt.expression.left, stmt.expression.right);
+            inspectAssignment(stmt.expression);
+        }
+    }
+
+    for (const stmt of ctorBody) {
+        if (stmt.type === 'ExpressionStatement' && stmt.expression.type === 'AssignmentExpression' && stmt.expression.operator === '=' && stmt.expression.right.type === 'Literal' && stmt.expression.right.value === null) {
+            const parts = partsFromMember(stmt.expression.left);
+            if (parts) {
+                const key = parts.join('.');
+                if (nodeRefPaths.has(key)) continue;
+            }
+        }
+        if (containsNodeRef(stmt)) {
+            throw new Error('[Hene] Cached nodes cannot be used inside the constructor');
         }
     }
 
@@ -301,9 +396,24 @@ export function transformHeneClassAST(classNode) {
     let unwatcherVarNames = [];
 
     if (renderHTML) {
-        const { creation_statements, nodes_assignment, sync_watchers } = buildDomInstructionsAST(renderHTML, reactiveStates);
+        const { creation_statements, node_map, sync_watchers } = buildDomInstructionsAST(renderHTML, reactiveStates);
         buildMethodStmts.push(...creation_statements);
-        if (nodes_assignment) buildMethodStmts.push(nodes_assignment);
+        Object.entries(node_map).forEach(([name, varName]) => {
+            const refs = nodeRefs.get(name);
+            if (refs) {
+                refs.forEach(ast => {
+                    buildMethodStmts.push({
+                        type: 'ExpressionStatement',
+                        expression: {
+                            type: 'AssignmentExpression',
+                            operator: '=',
+                            left: ast,
+                            right: { type: 'Identifier', name: varName }
+                        }
+                    });
+                });
+            }
+        });
 
         const syncWatcherAsts = [];
         if (sync_watchers && sync_watchers.length > 0) {
@@ -390,14 +500,13 @@ export function transformHeneClassAST(classNode) {
     }
 
     const hoistedEvHandlers = [];
-    const ctorEventStmts = [];
     let evCounter = { count: 0 };
     // Use currentClassBodyMembers which includes any ensure* created methods
-    process$EventListeners(classNode.body.body, ctor, disconnectedCb, evCounter, hoistedEvHandlers, ctorEventStmts);
+    process$EventListeners(classNode.body.body, ctor, connectedCb, disconnectedCb, evCounter, hoistedEvHandlers);
 
     ctorBody.push(...hoistedEvHandlers);
 
-    if (buildMethodStmts.length > 0 || ctorEventStmts.length > 0) {
+    if (buildMethodStmts.length > 0) {
         classBodyMembers.push({
             type: 'MethodDefinition',
             kind: 'method',
@@ -408,7 +517,7 @@ export function transformHeneClassAST(classNode) {
                 type: 'FunctionExpression',
                 id: null,
                 params: [],
-                body: { type: 'BlockStatement', body: [...buildMethodStmts, ...ctorEventStmts] },
+                body: { type: 'BlockStatement', body: [...buildMethodStmts] },
                 async: false,
                 generator: false,
                 expression: false

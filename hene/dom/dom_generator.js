@@ -114,12 +114,12 @@ export function stringToAstLiteral(strValue) {
 }
 
 /**
- * Builds DOM creation and `this.nodes` assignment AST from HTML string.
+ * Builds DOM creation AST and returns a node map for `$node` references.
  * @param {string} html - The HTML from `$render`.
- * @returns {object} { creation_statements, nodes_assignment, sync_watchers }.
+ * @returns {object} { creation_statements, node_map, sync_watchers }.
  */
 export function buildDomInstructionsAST(html, reactiveStates = new Map()) {
-    if (!html) return { creation_statements: [], nodes_assignment: null, sync_watchers: [] };
+    if (!html) return { creation_statements: [], node_map: {}, sync_watchers: [] };
 
     const stmts = [];
     const rootFrag = '_fragment_root';
@@ -140,22 +140,7 @@ export function buildDomInstructionsAST(html, reactiveStates = new Map()) {
 
     parsed.forEach(node => generateDomASTForNode(node, `this.${rootFrag}`, stmts, idCounter, nodeMap, watchers, reactiveStates));
 
-    const nodesAssign = Object.keys(nodeMap).length > 0 ? {
-        type: 'ExpressionStatement',
-        expression: {
-            type: 'AssignmentExpression', operator: '=',
-            left: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: 'nodes' }, computed: false },
-            right: {
-                type: 'ObjectExpression',
-                properties: Object.entries(nodeMap).map(([key, varName]) => ({
-                    type: 'Property', key: { type: 'Identifier', name: key }, value: { type: 'Identifier', name: varName },
-                    kind: 'init', method: false, shorthand: false, computed: false
-                }))
-            }
-        }
-    } : null;
-
-    return { creation_statements: stmts, nodes_assignment: nodesAssign, sync_watchers: watchers };
+    return { creation_statements: stmts, node_map: nodeMap, sync_watchers: watchers };
 }
 
 /**
