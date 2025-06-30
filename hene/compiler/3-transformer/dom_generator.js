@@ -1,4 +1,4 @@
-// hene/compiler/ast/dom_generator.js
+// hene/compiler/3-transformer/dom_generator.js
 /**
  * @fileoverview Generates AST for DOM creation and manipulation.
  * - `stringToAstLiteral`: Converts strings (potentially template literals) to AST literal nodes.
@@ -6,7 +6,7 @@
  *   of DOM creation statements, `this.nodes` assignments, and reactive sync watchers.
  * - `generateDomASTForNode`: Recursively generates AST for individual HTML elements and text nodes.
  */
-import { parseHTMLString } from './html_parser.js';
+import { parseHTMLString } from '../1-parser/html.js';
 import * as acorn from 'acorn';
 
 function collectReactiveRefs(ast, reactiveStates, found) {

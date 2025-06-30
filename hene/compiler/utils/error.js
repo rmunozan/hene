@@ -1,4 +1,4 @@
-// hene/compiler/errors.js
+// hene/compiler/utils/error.js
 /**
  * @fileoverview Helper utilities for compiler error creation and reporting.
  */

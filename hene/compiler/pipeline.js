@@ -2,7 +2,8 @@
 /**
  * @fileoverview Defines the ordered transformation pipeline for Hene.
  */
-import { transformHeneClassAST } from './transforms/class.js';
+import { analyzeClass } from './2-analyzer/index.js';
+import { transformHeneClassAST } from './3-transformer/index.js';
 
 /**
  * Apply all compiler transforms to the given program AST.
@@ -16,7 +17,8 @@ export default function runPipeline(ast) {
             node.superClass?.type === 'Identifier' &&
             node.superClass.name === 'HeneElement'
         ) {
-            transformHeneClassAST(node);
+            const context = analyzeClass(node);
+            transformHeneClassAST(node, context);
         }
     }
 }

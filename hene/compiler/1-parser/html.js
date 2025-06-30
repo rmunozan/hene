@@ -1,4 +1,4 @@
-// hene/compiler/ast/html_parser.js
+// hene/compiler/1-parser/html.js
 /**
  * @fileoverview Parses HTML strings into a simplified AST for Hene.
  * It uses `parse5` for robust HTML parsing and includes a mechanism

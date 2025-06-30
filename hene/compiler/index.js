@@ -1,4 +1,4 @@
-// hene/compiler/entry.js
+// hene/compiler/index.js
 /**
  * @fileoverview Entry point for Hene JavaScript compilation.
  * Parses source code and runs the compilation pipeline.
@@ -6,7 +6,7 @@
 import * as acorn from 'acorn';
 import { generate } from 'astring';
 import runPipeline from './pipeline.js';
-import { reportError } from './errors.js';
+import { reportError } from './utils/error.js';
 
 /**
  * Compile Hene source code.

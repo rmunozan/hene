@@ -12,14 +12,14 @@ import {
     ensureConstructor,
     ensureConnectedCallback,
     prependSuperCall,
-    ensureDisconnectedCallback,
-    partsFromMember
-} from './utils.js';
-import { heneError } from '../errors.js';
+    ensureDisconnectedCallback
+} from './class-shell.js';
+import { heneError } from '../utils/error.js';
 import { processEventListeners } from './events.js';
-import { createNodeTracker, collectNodesFromObject, hasNodeCall, containsNodeRef, inspectNodeAssignment } from './node.js';
-import { createStateMap, collectStatesFromObject, inspectStateAssignment, recordState, buildStateWatchers } from './state.js';
-import { processRender } from './render.js';
+import { collectNodesFromObject, inspectNodeAssignment } from '../2-analyzer/nodes.js';
+import { createStateMap } from '../2-analyzer/state.js';
+import { buildStateWatchers } from './reactivity.js';
+import { processRender } from './build-method.js';
 
 /**
  * Transforms `HeneElement` class AST: re-parents to `HTMLElement`, processes
@@ -27,7 +27,7 @@ import { processRender } from './render.js';
  *
  * @param {object} classNode - The class declaration AST node.
  */
-export function transformHeneClassAST(classNode) {
+export function transformHeneClassAST(classNode, analysis) {
     if (!classNode || !classNode.superClass || classNode.superClass.name !== 'HeneElement') {
         return;
     }
@@ -35,88 +35,36 @@ export function transformHeneClassAST(classNode) {
     classNode.superClass.name = 'HTMLElement';
     const classBodyMembers = classNode.body.body;
 
-    const ctor = ensureConstructor(classBodyMembers);
+    const ctor = analysis.ctor || ensureConstructor(classBodyMembers);
     const connectedCb = ensureConnectedCallback(classBodyMembers);
     const disconnectedCb = ensureDisconnectedCallback(classBodyMembers);
     const ctorBody = ctor.value.body.body;
 
-    const reactiveStates = createStateMap();
-    const nodeTracker = createNodeTracker();
+    const reactiveStates = analysis.stateMap || createStateMap();
+    const nodeTracker = analysis.nodeTracker || { refs: new Map(), paths: new Set() };
 
-    // Collect state and node references from property definitions
+    // Mutate property definitions for $node()
     for (const member of classBodyMembers) {
-        if (member.type === 'PropertyDefinition' && member.value) {
-            if (member.key.type !== 'Identifier') continue;
-            const base = ['this', member.key.name];
-            const val = member.value;
-            if (val.type === 'CallExpression' && val.callee.type === 'Identifier' && val.callee.name === '$state') {
-                recordState(base, reactiveStates);
-            } else if (val.type === 'ObjectExpression') {
-                collectStatesFromObject(val, base, reactiveStates);
-                collectNodesFromObject(val, base, nodeTracker);
-            }
+        if (member.type === 'PropertyDefinition' && member.value && member.value.type === 'ObjectExpression') {
+            collectNodesFromObject(member.value, ['this', member.key.name], nodeTracker);
         }
     }
 
-    for (const member of classBodyMembers) {
-        if (member === ctor) continue;
-        if (hasNodeCall(member)) {
-            throw heneError('$node() can only be used inside the constructor');
-        }
-    }
-
+    // Mutate constructor assignments for $node()
     for (const stmt of ctorBody) {
         if (stmt.type === 'ExpressionStatement' && stmt.expression.type === 'AssignmentExpression' && stmt.expression.operator === '=') {
-            inspectStateAssignment(stmt.expression, reactiveStates);
-            const parts = inspectNodeAssignment(stmt.expression, nodeTracker);
-            if (stmt.expression.right.type === 'ObjectExpression' && parts) {
-                collectStatesFromObject(stmt.expression.right, parts, reactiveStates);
-            }
+            inspectNodeAssignment(stmt.expression, nodeTracker);
         }
     }
 
-    for (const stmt of ctorBody) {
-        if (
-            stmt.type === 'ExpressionStatement' &&
-            stmt.expression.type === 'AssignmentExpression' &&
-            stmt.expression.operator === '=' &&
-            stmt.expression.right.type === 'Literal' &&
-            stmt.expression.right.value === null
-        ) {
-            const parts = partsFromMember(stmt.expression.left);
-            if (parts && nodeTracker.paths.has(parts.join('.'))) continue;
-        }
-        if (containsNodeRef(stmt, nodeTracker)) {
-            throw heneError('Cached nodes cannot be used inside the constructor');
-        }
-    }
-
-    let builtIdx = -1;
-    for (let i = 0; i < ctorBody.length; i++) {
-        const stmt = ctorBody[i];
-        if (
-            stmt.type === 'ExpressionStatement' &&
-            stmt.expression.type === 'CallExpression' &&
-            stmt.expression.callee.type === 'MemberExpression' &&
-            stmt.expression.callee.object.type === 'ThisExpression' &&
-            stmt.expression.callee.property.type === 'Identifier' &&
-            stmt.expression.callee.property.name === '$built'
-        ) {
-            if (builtIdx !== -1) console.warn(`[Hene] Multiple 'this.$built()' calls found. Using first one.`);
-            if (stmt.expression.arguments && stmt.expression.arguments.length > 0) {
-                 console.warn(`[Hene] 'this.$built()' should not have arguments. Ignoring them.`);
-            }
-            builtIdx = i;
-            break;
-        }
-    }
-
+    const builtIdx = typeof analysis.builtIdx === 'number' ? analysis.builtIdx : -1;
     if (builtIdx !== -1) {
         ctorBody.splice(builtIdx, 1);
     }
 
     const buildMethodStmts = [];
-    const renderHTML = extractRenderHTML(classBodyMembers);
+    const removedHTML = extractRenderHTML(classBodyMembers);
+    const renderHTML = analysis.renderHTML != null ? analysis.renderHTML : removedHTML;
     let unwatcherVarNames = [];
 
     if (renderHTML) {

@@ -1,23 +1,11 @@
-// hene/compiler/transforms/utils.js
-/**
- * @fileoverview AST manipulation utilities for the Hene compiler.
- * Includes functions for extracting `$render` content, ensuring standard
- * lifecycle methods (constructor, connectedCallback, disconnectedCallback)
- * exist in a class AST, and prepending `super()` calls.
- */
 import { generate } from 'astring';
-/**
- * Extracts and removes `$render` (property or method) HTML string from class AST.
- * @param {Array<object>} classBody - The AST body of the class.
- * @returns {string|null} The extracted HTML string or null.
- */
+
 export function extractRenderHTML(classBody) {
     if (!classBody) return null;
     let html = null;
     for (let i = 0; i < classBody.length; i++) {
         const member = classBody[i];
         if (!member) continue;
-
         if (
             member.type === 'PropertyDefinition' &&
             member.key?.type === 'Identifier' &&
@@ -37,16 +25,11 @@ export function extractRenderHTML(classBody) {
             else if (retStmt?.argument?.type === 'TemplateLiteral') html = generate(retStmt.argument).slice(1, -1);
             classBody.splice(i, 1); i--;
         }
-        if (html !== null) break; // Found and processed $render
+        if (html !== null) break;
     }
     return html;
 }
 
-/**
- * Ensures a constructor method exists in the class AST, creating one if not.
- * @param {Array<object>} classBody - The AST body of the class.
- * @returns {object} The constructor method AST node.
- */
 export function ensureConstructor(classBody) {
     let ctor = classBody.find(m => m.type === 'MethodDefinition' && m.kind === 'constructor');
     if (!ctor) {
@@ -64,10 +47,6 @@ export function ensureConstructor(classBody) {
     return ctor;
 }
 
-/**
- * Ensures `super()` is the first call in a constructor.
- * @param {object} ctorNode - The constructor method AST node.
- */
 export function prependSuperCall(ctorNode) {
     if (!ctorNode?.value?.body) return;
     const bodyStmts = ctorNode.value.body.body;
@@ -82,11 +61,6 @@ export function prependSuperCall(ctorNode) {
     }
 }
 
-/**
- * Ensures `connectedCallback` exists in the class AST, creating one if not.
- * @param {Array<object>} classBody - The AST body of the class.
- * @returns {object} The `connectedCallback` method AST node.
- */
 export function ensureConnectedCallback(classBody) {
     let cb = classBody.find(m => m.type === 'MethodDefinition' && m.key?.name === 'connectedCallback');
     if (!cb) {
@@ -104,11 +78,6 @@ export function ensureConnectedCallback(classBody) {
     return cb;
 }
 
-/**
- * Ensures `disconnectedCallback` exists in the class AST, creating one if not.
- * @param {Array<object>} classBody - The AST body of the class.
- * @returns {object} The `disconnectedCallback` method AST node.
- */
 export function ensureDisconnectedCallback(classBody) {
     let cb = classBody.find(m => m.type === 'MethodDefinition' && m.key?.name === 'disconnectedCallback');
     if (!cb) {
@@ -125,49 +94,3 @@ export function ensureDisconnectedCallback(classBody) {
     }
     return cb;
 }
-
-/**
- * Builds a member expression AST from a list of property names.
- *
- * @param {string[]} parts - e.g. ['this', 'nodes', 'btn']
- * @returns {object} MemberExpression AST node.
- */
-export function makeMemberAst(parts) {
-    let expr = parts[0] === 'this'
-        ? { type: 'ThisExpression' }
-        : { type: 'Identifier', name: parts[0] };
-    for (let i = 1; i < parts.length; i++) {
-        expr = {
-            type: 'MemberExpression',
-            object: expr,
-            property: { type: 'Identifier', name: parts[i] },
-            computed: false
-        };
-    }
-    return expr;
-}
-
-/**
- * Derives the property chain from a MemberExpression.
- *
- * @param {object} member - MemberExpression AST.
- * @returns {string[]|null} Array like ['this', 'foo', 'bar'] or null.
- */
-export function partsFromMember(member) {
-    const p = [];
-    let cur = member;
-    while (cur && cur.type === 'MemberExpression') {
-        if (cur.property.type !== 'Identifier') return null;
-        p.unshift(cur.property.name);
-        cur = cur.object;
-    }
-    if (cur && cur.type === 'ThisExpression') {
-        p.unshift('this');
-    } else if (cur && cur.type === 'Identifier') {
-        p.unshift(cur.name);
-    } else {
-        return null;
-    }
-    return p;
-}
-

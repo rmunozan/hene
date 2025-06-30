@@ -5,9 +5,10 @@
  */
 import * as acorn from 'acorn';
 import { generate } from 'astring';
-import { makeMemberAst, partsFromMember } from './utils.js';
-import { heneError } from '../errors.js';
-import { stringToAstLiteral } from '../ast/dom_generator.js';
+import { makeMemberAst } from '../utils/ast-builder.js';
+import { partsFromMember } from '../utils/ast-inspector.js';
+import { heneError } from '../utils/error.js';
+import { stringToAstLiteral } from '../3-transformer/dom_generator.js';
 
 /**
  * Create a new map to track `$state` members.

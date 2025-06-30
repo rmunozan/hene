@@ -3,8 +3,9 @@
  * @fileoverview Utilities for handling `$node` references within
  * Hene component classes.
  */
-import { makeMemberAst, partsFromMember } from './utils.js';
-import { heneError } from '../errors.js';
+import { makeMemberAst } from '../utils/ast-builder.js';
+import { partsFromMember } from '../utils/ast-inspector.js';
+import { heneError } from '../utils/error.js';
 
 /**
  * Create a tracker object for node references.
@@ -32,6 +33,7 @@ export function recordNodeRef(nodeName, parts, tracker) {
  * @param {string[]} baseParts - base member path
  * @param {object} tracker - tracker from `createNodeTracker()`
  */
+// Mutating version used during transformation
 export function collectNodesFromObject(objExpr, baseParts, tracker) {
     for (const prop of objExpr.properties || []) {
         if (prop.type !== 'Property' || prop.key.type !== 'Identifier') continue;
@@ -44,6 +46,22 @@ export function collectNodesFromObject(objExpr, baseParts, tracker) {
             prop.value = { type: 'Literal', value: null };
         } else if (val.type === 'ObjectExpression') {
             collectNodesFromObject(val, newParts, tracker);
+        }
+    }
+}
+
+// Read-only analysis version
+export function scanNodesFromObject(objExpr, baseParts, tracker) {
+    for (const prop of objExpr.properties || []) {
+        if (prop.type !== 'Property' || prop.key.type !== 'Identifier') continue;
+        const val = prop.value;
+        const newParts = baseParts.concat(prop.key.name);
+        if (val.type === 'CallExpression' && val.callee.type === 'Identifier' && val.callee.name === '$node') {
+            const arg = val.arguments && val.arguments[0];
+            if (!arg || arg.type !== 'Literal') throw heneError('$node() requires a string literal');
+            recordNodeRef(arg.value, newParts, tracker);
+        } else if (val.type === 'ObjectExpression') {
+            scanNodesFromObject(val, newParts, tracker);
         }
     }
 }
@@ -93,6 +111,7 @@ export function containsNodeRef(ast, tracker) {
  * @param {object} tracker - tracker from `createNodeTracker()`
  * @returns {string[]|null} Member path of the assignment target or null.
  */
+// Mutating version used during transformation
 export function inspectNodeAssignment(assignExpr, tracker) {
     const left = assignExpr.left;
     const right = assignExpr.right;
@@ -107,6 +126,24 @@ export function inspectNodeAssignment(assignExpr, tracker) {
         return parts;
     } else if (right.type === 'ObjectExpression') {
         collectNodesFromObject(right, parts, tracker);
+    }
+    return parts;
+}
+
+// Read-only analysis version
+export function scanNodeAssignment(assignExpr, tracker) {
+    const left = assignExpr.left;
+    const right = assignExpr.right;
+    if (left.type !== 'MemberExpression') return null;
+    const parts = partsFromMember(left);
+    if (!parts) return null;
+    if (right.type === 'CallExpression' && right.callee.type === 'Identifier' && right.callee.name === '$node') {
+        const arg = right.arguments && right.arguments[0];
+        if (!arg || arg.type !== 'Literal') throw heneError('$node() requires a string literal');
+        recordNodeRef(arg.value, parts, tracker);
+        return parts;
+    } else if (right.type === 'ObjectExpression') {
+        scanNodesFromObject(right, parts, tracker);
     }
     return parts;
 }

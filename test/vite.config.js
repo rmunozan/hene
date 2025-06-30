@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import compile from '../hene/compiler/entry.js';
+import compile from '../hene/compiler/index.js';
 
 function heneCompiler() {
   return {

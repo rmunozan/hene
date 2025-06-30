@@ -3,8 +3,8 @@
  * @fileoverview Processes a class `$render` string into DOM creation
  * statements and watcher metadata.
  */
-import { buildDomInstructionsAST } from '../ast/dom_generator.js';
-import { makeMemberAst } from './utils.js';
+import { buildDomInstructionsAST } from './dom_generator.js';
+import { makeMemberAst } from '../utils/ast-builder.js';
 
 /**
  * Transform a `$render` HTML string.
