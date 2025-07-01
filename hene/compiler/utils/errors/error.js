@@ -1,4 +1,5 @@
 // hene/compiler/utils/error.js
+import messages from './error-messages.json' assert { type: 'json' };
 /**
  * @fileoverview Helper utilities for compiler error creation and reporting.
  */
@@ -8,7 +9,8 @@
  * @param {string} msg
  * @returns {Error}
  */
-export function heneError(msg) {
+export function heneError(code) {
+  const msg = messages[code] || code;
   return new Error(`[Hene] ${msg}`);
 }
 

@@ -429,7 +429,8 @@ export function transformRender(context) {
 
     const ctor = context.analysis.ctor;
     if (ctor) {
-        ctor.value.body.body.unshift({
+        const body = ctor.value.body.body;
+        const assignStmt = {
             type: 'ExpressionStatement',
             expression: {
                 type: 'AssignmentExpression',
@@ -437,7 +438,10 @@ export function transformRender(context) {
                 left: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__built' }, computed: false },
                 right: { type: 'Literal', value: false }
             }
-        });
+        };
+        const superIdx = body.findIndex(s => s.type === 'ExpressionStatement' && s.expression.type === 'CallExpression' && s.expression.callee.type === 'Super');
+        if (superIdx !== -1) body.splice(superIdx + 1, 0, assignStmt);
+        else body.unshift(assignStmt);
     }
 
     const connectedCb = context.analysis.connectedCb;

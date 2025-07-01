@@ -160,7 +160,7 @@ export function processEventListeners(classMembers, constructorNode, connectedCb
                     };
     
                     if (bodyStmts !== connectedCbNode.value.body.body) {
-                        throw heneError('$event() can only be used inside connectedCallback');
+                        throw heneError('ERR_EVENT_CONNECTED_ONLY');
                     }
                     bodyStmts[i] = addEvtStmt;
     

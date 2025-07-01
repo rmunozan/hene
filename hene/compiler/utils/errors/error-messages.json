@@ -1,0 +1,5 @@
+{
+  "ERR_NODE_STRING_LITERAL": "$node() requires a string literal",
+  "ERR_NODE_CONSTRUCTOR_ONLY": "$node() can only be used inside the constructor",
+  "ERR_EVENT_CONNECTED_ONLY": "$event() can only be used inside connectedCallback"
+}

@@ -16,11 +16,10 @@ import { findHeneClass } from './analyzer/analyze-class.js';
 import { analyzeState } from './analyzer/analyze-state.js';
 import { analyzeNodes } from './analyzer/analyze-nodes.js';
 import { analyzeRender } from './analyzer/analyze-render.js';
-import { analyzeEvents } from './analyzer/analyze-events.js';
 
 // --- STAGE 3: TRANSFORMERS ---
 import { transformClassShell } from './transformer/transform-class-shell.js';
-import { transformInitializers } from './transformer/transform-initializers.js';
+import { transformNodes } from './transformer/transform-nodes.js';
 import { transformRender } from './transformer/transform-render.js';
 import { transformWatchers } from './transformer/transform-watchers.js';
 import { transformEvents } from './transformer/transform-events.js';
@@ -53,11 +52,10 @@ export function runPipeline(sourceCode) {
         analyzeState(context);
         analyzeNodes(context);
         analyzeRender(context);
-        analyzeEvents(context);
 
         // STAGE 3: TRANSFORMATION
         transformClassShell(context);
-        transformInitializers(context);
+        transformNodes(context);
         transformRender(context);
         transformWatchers(context);
         transformEvents(context);
