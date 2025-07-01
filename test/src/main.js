@@ -1,24 +1,28 @@
-import { $state } from "../../hene/index.js";
+import { $state } from "../../hene";
 
-class counter extends HeneElement {
-        constructor() {
-                this.count = $state(0);
-                this.btn = $node('btn');
-        }
+class hello extends HeneElement {
+	constructor() {
+		this.text = $state('');
+		this.input = $node('input');
+		console.log(this.input);
+	}
 
-        connectedCallback() {
-                this.btn.$event("click", this.increase);
-        }
+	update(e) {
+		console.log(e);
+		this.text(this.input.value);
+	}
 
-        increase = () => this.count(this.count() + 1);
+	connectedCallback() {
+		this.input.$event('input', this.update);
+	}
 
-        $render() {
-                return `
-                        <h1>The current value: ${this.count()}</h1>
-                        <button node="btn">Increase</button>
-                `
-        }
+	$render() {
+		return `
+			<h1>Hello ${this.text()}</h1>
+			<input node="input" />
+		`
+	}
 }
 
-customElements.define("counter-comp", counter);
+customElements.define("hello-world", hello);
 
