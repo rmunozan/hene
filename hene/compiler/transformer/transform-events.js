@@ -3,7 +3,7 @@
  * @fileoverview Event-related transforms for Hene.
  * Provides utilities for handling `$event` calls within component classes.
  */
-import { heneError } from '../utils/error.js';
+import { heneError } from '../utils/errors/error.js';
 
 /**
  * Processes `$event` calls in class members, hoists inline listeners,
@@ -212,5 +212,21 @@ export function processEventListeners(classMembers, constructorNode, connectedCb
                 }
             });
         }
+}
+
+
+/**
+ * Apply event listener transformations.
+ * @param {import("../context.js").Context} context
+ */
+export function transformEvents(context) {
+    const classNode = context.analysis.classNode;
+    if (!classNode) return;
+    const ctor = context.analysis.ctor;
+    const connectedCb = context.analysis.connectedCb;
+    const disconnectedCb = context.analysis.disconnectedCb;
+    const hoisted = [];
+    processEventListeners(classNode.body.body, ctor, connectedCb, disconnectedCb, { count: 0 }, hoisted);
+    if (ctor) ctor.value.body.body.push(...hoisted);
 }
 

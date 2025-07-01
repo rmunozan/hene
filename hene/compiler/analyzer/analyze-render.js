@@ -1,6 +1,7 @@
+// hene/compiler/analyzer/analyze-render.js
 import { generate } from 'astring';
 
-export function findRenderHTML(classBody) {
+function findRenderHTML(classBody) {
     if (!classBody) return null;
     for (const member of classBody) {
         if (member.type === 'PropertyDefinition' && member.key?.type === 'Identifier' && member.key.name === '$render') {
@@ -13,4 +14,14 @@ export function findRenderHTML(classBody) {
         }
     }
     return null;
+}
+
+/**
+ * Extract the $render HTML string and store it on context.analysis.renderHTML.
+ * @param {import('../context.js').Context} context
+ */
+export function analyzeRender(context) {
+    const classNode = context.analysis.classNode;
+    if (!classNode) return;
+    context.analysis.renderHTML = findRenderHTML(classNode.body.body);
 }

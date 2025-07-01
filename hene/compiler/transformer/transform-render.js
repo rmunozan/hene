@@ -6,8 +6,30 @@
  *   of DOM creation statements, `this.nodes` assignments, and reactive sync watchers.
  * - `generateDomASTForNode`: Recursively generates AST for individual HTML elements and text nodes.
  */
-import { parseHTMLString } from '../1-parser/html.js';
+import { parseHTMLString } from '../parser/html-parser.js';
 import * as acorn from 'acorn';
+import { generate } from "astring";
+function extractRenderHTML(classBody) {
+    if (!classBody) return null;
+    let html = null;
+    for (let i = 0; i < classBody.length; i++) {
+        const member = classBody[i];
+        if (!member) continue;
+        if (member.type === "PropertyDefinition" && member.key?.type === "Identifier" && member.key.name === "$render") {
+            if (member.value?.type === "Literal") html = member.value.value;
+            else if (member.value?.type === "TemplateLiteral") html = generate(member.value).slice(1, -1);
+            classBody.splice(i, 1); i--;
+        } else if (member.type === "MethodDefinition" && member.key?.type === "Identifier" && member.key.name === "$render" && member.value?.body?.type === "BlockStatement") {
+            const retStmt = member.value.body.body.find(s => s.type === "ReturnStatement");
+            if (retStmt?.argument?.type === "Literal") html = retStmt.argument.value;
+            else if (retStmt?.argument?.type === "TemplateLiteral") html = generate(retStmt.argument).slice(1, -1);
+            classBody.splice(i, 1); i--;
+        }
+        if (html !== null) break;
+    }
+    return html;
+}
+
 
 function collectReactiveRefs(ast, reactiveStates, found) {
     if (!ast || typeof ast !== 'object') return;
@@ -335,4 +357,110 @@ function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watch
         return [elVar];
     }
     return [];
+}
+
+export function processRender(html, reactiveStates, nodeRefs) {
+    const { creation_statements, node_map, sync_watchers } = buildDomInstructionsAST(html, reactiveStates);
+    const stmts = [...creation_statements];
+
+    Object.entries(node_map).forEach(([name, varName]) => {
+        const refs = nodeRefs.get(name);
+        if (!refs) return;
+        const declIdx = stmts.findIndex(s => s.type === 'VariableDeclaration' && s.declarations[0].id.name === varName);
+        refs.forEach((ast, idx) => {
+            if (idx === 0 && declIdx >= 0 && ast.type === 'MemberExpression' && ast.object.type === 'ThisExpression') {
+                const init = stmts[declIdx].declarations[0].init;
+                stmts[declIdx].declarations[0].init = {
+                    type: 'AssignmentExpression',
+                    operator: '=',
+                    left: ast,
+                    right: init
+                };
+            } else {
+                stmts.push({
+                    type: 'ExpressionStatement',
+                    expression: {
+                        type: 'AssignmentExpression',
+                        operator: '=',
+                        left: ast,
+                        right: { type: 'Identifier', name: varName }
+                    }
+                });
+            }
+        });
+    });
+
+    return { statements: stmts, watchers: sync_watchers };
+}
+
+/**
+ * Transform the $render HTML into a __build method and setup build guards.
+ * Stores watcher info for later stages.
+ * @param {import('../context.js').Context} context
+ */
+export function transformRender(context) {
+    const classNode = context.analysis.classNode;
+    if (!classNode) return;
+    const classBody = classNode.body.body;
+
+    const removedHTML = extractRenderHTML(classBody);
+    const html = context.analysis.renderHTML != null ? context.analysis.renderHTML : removedHTML;
+    if (!html) return;
+
+    const { statements, watchers } = processRender(html, context.analysis.stateMap || new Map(), context.analysis.nodeTracker.refs);
+    context.analysis.syncWatchers = watchers;
+
+    classBody.push({
+        type: 'MethodDefinition',
+        kind: 'method',
+        static: false,
+        computed: false,
+        key: { type: 'Identifier', name: '__build' },
+        value: {
+            type: 'FunctionExpression',
+            id: null,
+            params: [],
+            body: { type: 'BlockStatement', body: [...statements] },
+            async: false,
+            generator: false,
+            expression: false
+        }
+    });
+
+    const ctor = context.analysis.ctor;
+    if (ctor) {
+        ctor.value.body.body.unshift({
+            type: 'ExpressionStatement',
+            expression: {
+                type: 'AssignmentExpression',
+                operator: '=',
+                left: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__built' }, computed: false },
+                right: { type: 'Literal', value: false }
+            }
+        });
+    }
+
+    const connectedCb = context.analysis.connectedCb;
+    if (connectedCb) {
+        connectedCb.value.body.body.unshift({
+            type: 'IfStatement',
+            test: { type: 'UnaryExpression', operator: '!', prefix: true, argument: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__built' }, computed: false } },
+            consequent: {
+                type: 'BlockStatement',
+                body: [
+                    { type: 'ExpressionStatement', expression: { type: 'CallExpression', callee: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__build' }, computed: false }, arguments: [] } },
+                    { type: 'ExpressionStatement', expression: { type: 'AssignmentExpression', operator: '=', left: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '__built' }, computed: false }, right: { type: 'Literal', value: true } } }
+                ]
+            },
+            alternate: null
+        });
+        connectedCb.value.body.body.push({
+            type: 'ExpressionStatement',
+            expression: {
+                type: 'CallExpression',
+                callee: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: 'appendChild' }, computed: false },
+                arguments: [{ type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name: '_root' }, computed: false }]
+            }
+        });
+    }
 }

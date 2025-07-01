@@ -1,24 +1,74 @@
 // hene/compiler/pipeline.js
 /**
- * @fileoverview Defines the ordered transformation pipeline for Hene.
+ * @fileoverview The master pipeline orchestrator for the Hene compiler.
+ *
+ * This file instantiates a shared Context and passes it sequentially
+ * through every specialized function from all compiler stages.
  */
-import { analyzeClass } from './2-analyzer/index.js';
-import { transformHeneClassAST } from './3-transformer/index.js';
+
+import { Context } from './context.js';
+
+// --- STAGE 1: PARSER ---
+import { parseJavaScript } from './parser/js-parser.js';
+
+// --- STAGE 2: ANALYZERS ---
+import { findHeneClass } from './analyzer/analyze-class.js';
+import { analyzeState } from './analyzer/analyze-state.js';
+import { analyzeNodes } from './analyzer/analyze-nodes.js';
+import { analyzeRender } from './analyzer/analyze-render.js';
+import { analyzeEvents } from './analyzer/analyze-events.js';
+
+// --- STAGE 3: TRANSFORMERS ---
+import { transformClassShell } from './transformer/transform-class-shell.js';
+import { transformInitializers } from './transformer/transform-initializers.js';
+import { transformRender } from './transformer/transform-render.js';
+import { transformWatchers } from './transformer/transform-watchers.js';
+import { transformEvents } from './transformer/transform-events.js';
+
+// --- STAGE 4: GENERATOR ---
+import { generateJavaScript } from './generator/js-generator.js';
+
+import { reportError } from './utils/errors/error.js';
 
 /**
- * Apply all compiler transforms to the given program AST.
- * @param {object} ast - Parsed Program AST (Acorn format).
+ * Runs the full compilation pipeline on a string of source code.
+ * @param {string} sourceCode The original JavaScript source code.
+ * @returns {string} The transformed JavaScript code.
  */
-export default function runPipeline(ast) {
-    if (!ast || !Array.isArray(ast.body)) return;
-    for (const node of ast.body) {
-        if (
-            node?.type === 'ClassDeclaration' &&
-            node.superClass?.type === 'Identifier' &&
-            node.superClass.name === 'HeneElement'
-        ) {
-            const context = analyzeClass(node);
-            transformHeneClassAST(node, context);
+export function runPipeline(sourceCode) {
+    if (!sourceCode) return '';
+
+    // Initialize the shared context for this entire compilation run.
+    const context = new Context(sourceCode);
+
+    try {
+        // STAGE 1: PARSING
+        parseJavaScript(context);
+
+        // STAGE 2: ANALYSIS
+        findHeneClass(context);
+        if (!context.analysis?.classNode) {
+            return context.sourceCode;
         }
+        analyzeState(context);
+        analyzeNodes(context);
+        analyzeRender(context);
+        analyzeEvents(context);
+
+        // STAGE 3: TRANSFORMATION
+        transformClassShell(context);
+        transformInitializers(context);
+        transformRender(context);
+        transformWatchers(context);
+        transformEvents(context);
+
+        // STAGE 4: GENERATION
+        generateJavaScript(context);
+
+    } catch (e) {
+        reportError(e, context.sourceCode);
     }
+
+    // Return the final code from the context.
+    return context.output.code;
 }

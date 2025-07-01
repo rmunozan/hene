@@ -1,34 +1,5 @@
-import { generate } from 'astring';
-
-export function extractRenderHTML(classBody) {
-    if (!classBody) return null;
-    let html = null;
-    for (let i = 0; i < classBody.length; i++) {
-        const member = classBody[i];
-        if (!member) continue;
-        if (
-            member.type === 'PropertyDefinition' &&
-            member.key?.type === 'Identifier' &&
-            member.key.name === '$render'
-        ) {
-            if (member.value?.type === 'Literal') html = member.value.value;
-            else if (member.value?.type === 'TemplateLiteral') html = generate(member.value).slice(1, -1);
-            classBody.splice(i, 1); i--;
-        } else if (
-            member.type === 'MethodDefinition' &&
-            member.key?.type === 'Identifier' &&
-            member.key.name === '$render' &&
-            member.value?.body?.type === 'BlockStatement'
-        ) {
-            const retStmt = member.value.body.body.find(s => s.type === 'ReturnStatement');
-            if (retStmt?.argument?.type === 'Literal') html = retStmt.argument.value;
-            else if (retStmt?.argument?.type === 'TemplateLiteral') html = generate(retStmt.argument).slice(1, -1);
-            classBody.splice(i, 1); i--;
-        }
-        if (html !== null) break;
-    }
-    return html;
-}
+// hene/compiler/transformer/transform-class-shell.js
+/** Modifies the class shell: superclass, constructor, and lifecycle hooks. */
 
 export function ensureConstructor(classBody) {
     let ctor = classBody.find(m => m.type === 'MethodDefinition' && m.kind === 'constructor');
@@ -93,4 +64,22 @@ export function ensureDisconnectedCallback(classBody) {
         classBody.push(cb);
     }
     return cb;
+}
+
+/**
+ * Apply class shell transformations.
+ * @param {import('../context.js').Context} context
+ */
+export function transformClassShell(context) {
+    const classNode = context.analysis.classNode;
+    if (!classNode) return;
+    classNode.superClass.name = 'HTMLElement';
+    const classBody = classNode.body.body;
+    const ctor = ensureConstructor(classBody);
+    context.analysis.ctor = ctor;
+    const connectedCb = ensureConnectedCallback(classBody);
+    const disconnectedCb = ensureDisconnectedCallback(classBody);
+    context.analysis.connectedCb = connectedCb;
+    context.analysis.disconnectedCb = disconnectedCb;
+    prependSuperCall(ctor);
 }

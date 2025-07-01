@@ -1,39 +1,18 @@
-// hene/compiler/transforms/node.js
-/**
- * @fileoverview Utilities for handling `$node` references within
- * Hene component classes.
- */
-import { makeMemberAst } from '../utils/ast-builder.js';
-import { partsFromMember } from '../utils/ast-inspector.js';
-import { heneError } from '../utils/error.js';
+// hene/compiler/analyzer/analyze-nodes.js
+import { makeMemberAst } from '../utils/ast/ast-builder.js';
+import { partsFromMember } from '../utils/ast/ast-inspector.js';
+import { heneError } from '../utils/errors/error.js';
 
-/**
- * Create a tracker object for node references.
- * @returns {{refs: Map<string, object[]>, paths: Set<string>}}
- */
 export function createNodeTracker() {
     return { refs: new Map(), paths: new Set() };
 }
 
-/**
- * Record a `$node` reference for later replacement.
- * @param {string} nodeName - name passed to `$node()`
- * @param {string[]} parts - member path (e.g. ['this','nodes','btn'])
- * @param {object} tracker - tracker from `createNodeTracker()`
- */
 export function recordNodeRef(nodeName, parts, tracker) {
     if (!tracker.refs.has(nodeName)) tracker.refs.set(nodeName, []);
     tracker.refs.get(nodeName).push(makeMemberAst(parts));
     tracker.paths.add(parts.join('.'));
 }
 
-/**
- * Recursively collect `$node()` calls from an object expression.
- * @param {object} objExpr - ObjectExpression AST
- * @param {string[]} baseParts - base member path
- * @param {object} tracker - tracker from `createNodeTracker()`
- */
-// Mutating version used during transformation
 export function collectNodesFromObject(objExpr, baseParts, tracker) {
     for (const prop of objExpr.properties || []) {
         if (prop.type !== 'Property' || prop.key.type !== 'Identifier') continue;
@@ -50,7 +29,6 @@ export function collectNodesFromObject(objExpr, baseParts, tracker) {
     }
 }
 
-// Read-only analysis version
 export function scanNodesFromObject(objExpr, baseParts, tracker) {
     for (const prop of objExpr.properties || []) {
         if (prop.type !== 'Property' || prop.key.type !== 'Identifier') continue;
@@ -66,52 +44,6 @@ export function scanNodesFromObject(objExpr, baseParts, tracker) {
     }
 }
 
-/**
- * Determine whether an AST contains any `$node()` call.
- * @param {object} ast - AST node
- * @returns {boolean}
- */
-export function hasNodeCall(ast) {
-    if (!ast || typeof ast !== 'object') return false;
-    if (ast.type === 'CallExpression' && ast.callee.type === 'Identifier' && ast.callee.name === '$node') {
-        return true;
-    }
-    for (const k in ast) {
-        const v = ast[k];
-        if (Array.isArray(v)) { if (v.some(e => hasNodeCall(e))) return true; }
-        else if (v && typeof v === 'object') { if (hasNodeCall(v)) return true; }
-    }
-    return false;
-}
-
-/**
- * Check whether the given AST uses any recorded `$node` reference.
- * @param {object} ast - AST node to scan
- * @param {object} tracker - tracker from `createNodeTracker()`
- * @returns {boolean}
- */
-export function containsNodeRef(ast, tracker) {
-    if (!ast || typeof ast !== 'object') return false;
-    if (ast.type === 'MemberExpression') {
-        const parts = partsFromMember(ast);
-        if (parts && tracker.paths.has(parts.join('.'))) return true;
-    }
-    for (const k in ast) {
-        const v = ast[k];
-        if (Array.isArray(v)) { if (v.some(e => containsNodeRef(e, tracker))) return true; }
-        else if (v && typeof v === 'object') { if (containsNodeRef(v, tracker)) return true; }
-    }
-    return false;
-}
-
-/**
- * Inspect an assignment for `$node()` usage and record it.
- *
- * @param {object} assignExpr - AssignmentExpression node
- * @param {object} tracker - tracker from `createNodeTracker()`
- * @returns {string[]|null} Member path of the assignment target or null.
- */
-// Mutating version used during transformation
 export function inspectNodeAssignment(assignExpr, tracker) {
     const left = assignExpr.left;
     const right = assignExpr.right;
@@ -130,7 +62,6 @@ export function inspectNodeAssignment(assignExpr, tracker) {
     return parts;
 }
 
-// Read-only analysis version
 export function scanNodeAssignment(assignExpr, tracker) {
     const left = assignExpr.left;
     const right = assignExpr.right;
@@ -146,4 +77,49 @@ export function scanNodeAssignment(assignExpr, tracker) {
         scanNodesFromObject(right, parts, tracker);
     }
     return parts;
+}
+
+export function hasNodeCall(ast) {
+    if (!ast || typeof ast !== 'object') return false;
+    if (ast.type === 'CallExpression' && ast.callee.type === 'Identifier' && ast.callee.name === '$node') return true;
+    for (const k in ast) {
+        const v = ast[k];
+        if (Array.isArray(v)) { if (v.some(e => hasNodeCall(e))) return true; }
+        else if (v && typeof v === 'object') { if (hasNodeCall(v)) return true; }
+    }
+    return false;
+}
+
+export function analyzeNodes(context) {
+    const classNode = context.analysis.classNode;
+    if (!classNode) return;
+
+    const tracker = createNodeTracker();
+    const classBody = classNode.body.body;
+    const ctor = context.analysis.ctor;
+
+    for (const member of classBody) {
+        if (member.type === 'PropertyDefinition' && member.value && member.value.type === 'ObjectExpression') {
+            if (member.key.type !== 'Identifier') continue;
+            scanNodesFromObject(member.value, ['this', member.key.name], tracker);
+        }
+    }
+
+    if (ctor) {
+        const ctorBody = ctor.value.body.body;
+        for (const stmt of ctorBody) {
+            if (stmt.type === 'ExpressionStatement' && stmt.expression.type === 'AssignmentExpression' && stmt.expression.operator === '=') {
+                scanNodeAssignment(stmt.expression, tracker);
+            }
+        }
+    }
+
+    for (const member of classBody) {
+        if (member === ctor) continue;
+        if (hasNodeCall(member)) {
+            throw heneError('$node() can only be used inside the constructor');
+        }
+    }
+
+    context.analysis.nodeTracker = tracker;
 }

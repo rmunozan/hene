@@ -1,90 +1,8 @@
-// hene/compiler/transforms/state.js
-/**
- * @fileoverview Logic for analysing `$state` usage and generating
- * reactive binding watchers.
- */
+// hene/compiler/transformer/transform-watchers.js
 import * as acorn from 'acorn';
 import { generate } from 'astring';
-import { makeMemberAst } from '../utils/ast-builder.js';
-import { partsFromMember } from '../utils/ast-inspector.js';
-import { heneError } from '../utils/error.js';
-import { stringToAstLiteral } from '../3-transformer/dom_generator.js';
+import { stringToAstLiteral } from './transform-render.js';
 
-/**
- * Create a new map to track `$state` members.
- * @returns {Map<string, object>}
- */
-export function createStateMap() {
-    return new Map();
-}
-
-/**
- * Record a `$state` member path in the provided map.
- * @param {string[]} parts
- * @param {Map<string, object>} map
- */
-export function recordState(parts, map) {
-    const key = parts.join('.');
-    if (!map.has(key)) {
-        map.set(key, makeMemberAst(parts));
-    }
-}
-
-/**
- * Recursively walk an object expression to find `$state()` calls.
- * @param {object} objExpr
- * @param {string[]} baseParts
- * @param {Map<string, object>} map
- */
-export function collectStatesFromObject(objExpr, baseParts, map) {
-    for (const prop of objExpr.properties || []) {
-        if (prop.type !== 'Property' || prop.key.type !== 'Identifier') continue;
-        const val = prop.value;
-        const newParts = baseParts.concat(prop.key.name);
-        if (val.type === 'CallExpression' && val.callee.type === 'Identifier' && val.callee.name === '$state') {
-            recordState(newParts, map);
-        } else if (val.type === 'ObjectExpression') {
-            collectStatesFromObject(val, newParts, map);
-        }
-    }
-}
-
-/**
- * Inspect an assignment expression for `$state()` usage.
- * @param {object} assignExpr - AssignmentExpression node
- * @param {Map<string, object>} map
- */
-export function inspectStateAssignment(assignExpr, map) {
-    const left = assignExpr.left;
-    const right = assignExpr.right;
-    if (left.type !== 'MemberExpression') return;
-    const parts = [];
-    let cur = left;
-    while (cur.type === 'MemberExpression') {
-        if (cur.property.type !== 'Identifier') return;
-        parts.unshift(cur.property.name);
-        cur = cur.object;
-    }
-    if (cur.type === 'ThisExpression') {
-        parts.unshift('this');
-    } else if (cur.type === 'Identifier') {
-        parts.unshift(cur.name);
-    } else {
-        return;
-    }
-
-    if (right.type === 'CallExpression' && right.callee.type === 'Identifier' && right.callee.name === '$state') {
-        recordState(parts, map);
-    } else if (right.type === 'ObjectExpression') {
-        collectStatesFromObject(right, parts, map);
-    }
-}
-
-/**
- * Create watcher statements for DOM bindings referencing `$state` values.
- * @param {Array<object>} syncWatchers - collected watcher info
- * @returns {{statements: object[], unwatcherNames: string[]}}
- */
 export function buildStateWatchers(syncWatchers) {
     const result = { statements: [], unwatcherNames: [] };
     if (!syncWatchers || syncWatchers.length === 0) return result;
@@ -171,4 +89,31 @@ export function buildStateWatchers(syncWatchers) {
     });
 
     return result;
+}
+
+/**
+ * Inject watcher statements into the __build method and setup cleanup calls.
+ * @param {import('../context.js').Context} context
+ */
+export function transformWatchers(context) {
+    const watchers = context.analysis.syncWatchers;
+    if (!watchers || watchers.length === 0) return;
+    const buildMethod = context.analysis.classNode.body.body.find(m => m.key?.name === '__build');
+    if (!buildMethod) return;
+    const watchData = buildStateWatchers(watchers);
+    buildMethod.value.body.body.push(...watchData.statements);
+    const disconnectedCb = context.analysis.disconnectedCb;
+    if (disconnectedCb) {
+        watchData.unwatcherNames.forEach(name => {
+            disconnectedCb.value.body.body.unshift({
+                type: 'ExpressionStatement',
+                expression: {
+                    type: 'CallExpression',
+                    callee: { type: 'MemberExpression', object: { type: 'ThisExpression' }, property: { type: 'Identifier', name }, computed: false },
+                    arguments: [],
+                    optional: false
+                }
+            });
+        });
+    }
 }
