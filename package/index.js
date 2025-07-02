@@ -1,7 +1,8 @@
-import { defineConfig } from 'vite';
-import compile from '../hene/compiler/index.js';
+import compile from './compiler/index.js';
+export { $state } from './runtime/state.js';
+export { HeneElement } from './compiler/utils/base-class.js';
 
-function heneCompiler() {
+export function heneCompiler() {
   return {
     name: 'hene-compiler',
     enforce: 'pre',
@@ -14,10 +15,3 @@ function heneCompiler() {
     }
   };
 }
-
-export default defineConfig({
-	root: 'src',
-	plugins: [
-    heneCompiler()
-  ]
-});
