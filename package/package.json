@@ -10,7 +10,7 @@
   "bugs": { "url": "https://github.com/rmunozan/hene/issues" },
   "homepage": "https://github.com/rmunozan/hene#readme",
   "scripts": {
-    "test": "node --version"
+    "test": "node ../tests/snapshot.test.js"
   },
   "engines": {
     "node": ">=18"
