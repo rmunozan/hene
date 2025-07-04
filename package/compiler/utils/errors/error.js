@@ -1,5 +1,8 @@
 // hene/compiler/utils/error.js
-import messages from './error-messages.json' assert { type: 'json' };
+import { readFileSync } from 'fs';
+const messages = JSON.parse(
+  readFileSync(new URL('./error-messages.json', import.meta.url), 'utf8')
+);
 /**
  * @fileoverview Helper utilities for compiler error creation and reporting.
  */
