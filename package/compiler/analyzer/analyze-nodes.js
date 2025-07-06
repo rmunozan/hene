@@ -7,9 +7,9 @@ export function createNodeTracker() {
     return { refs: new Map(), paths: new Set() };
 }
 
-export function recordNodeRef(nodeName, parts, tracker) {
+export function recordNodeRef(nodeName, parts, tracker, locNode) {
     if (!tracker.refs.has(nodeName)) tracker.refs.set(nodeName, []);
-    tracker.refs.get(nodeName).push(makeMemberAst(parts));
+    tracker.refs.get(nodeName).push(makeMemberAst(parts, locNode?.loc));
     tracker.paths.add(parts.join('.'));
 }
 export function scanNodesFromObject(objExpr, baseParts, tracker) {
@@ -21,7 +21,7 @@ export function scanNodesFromObject(objExpr, baseParts, tracker) {
             const arg = val.arguments && val.arguments[0];
             if (val.arguments.length !== 1) throw heneError('ERR_NODE_SINGLE_ARG', val);
             if (!arg || arg.type !== 'Literal') throw heneError('ERR_NODE_STRING_LITERAL', arg || val);
-            recordNodeRef(arg.value, newParts, tracker);
+            recordNodeRef(arg.value, newParts, tracker, prop);
         } else if (val.type === 'ObjectExpression') {
             scanNodesFromObject(val, newParts, tracker);
         }
@@ -38,7 +38,7 @@ export function scanNodeAssignment(assignExpr, tracker) {
         const arg = right.arguments && right.arguments[0];
         if (right.arguments.length !== 1) throw heneError('ERR_NODE_SINGLE_ARG', right);
         if (!arg || arg.type !== 'Literal') throw heneError('ERR_NODE_STRING_LITERAL', arg || right);
-        recordNodeRef(arg.value, parts, tracker);
+        recordNodeRef(arg.value, parts, tracker, left);
         return parts;
     } else if (right.type === 'ObjectExpression') {
         scanNodesFromObject(right, parts, tracker);

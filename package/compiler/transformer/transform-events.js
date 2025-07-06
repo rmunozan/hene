@@ -55,7 +55,7 @@ export function processEventListeners(classMembers, constructorNode, connectedCb
                     stmt.expression.callee.property.name === '$event'
                 ) {
                     const callExpr = stmt.expression;
-                    if (callExpr.arguments.length !== 3) {
+                    if (callExpr.arguments.length < 2 || callExpr.arguments.length > 3) {
                         throw heneError('ERR_EVENT_ARG_COUNT', callExpr);
                     }
 

@@ -11,7 +11,7 @@ function collectNodesFromObject(objExpr, baseParts, tracker) {
             const arg = val.arguments && val.arguments[0];
             if (val.arguments.length !== 1) throw heneError('ERR_NODE_SINGLE_ARG', val);
             if (!arg || arg.type !== 'Literal') throw heneError('ERR_NODE_STRING_LITERAL', arg || val);
-            recordNodeRef(arg.value, newParts, tracker);
+            recordNodeRef(arg.value, newParts, tracker, prop);
             prop.value = { type: 'Literal', value: null };
         } else if (val.type === 'ObjectExpression') {
             collectNodesFromObject(val, newParts, tracker);
@@ -36,7 +36,7 @@ function inspectNodeAssignment(assignExpr, tracker) {
         const arg = right.arguments && right.arguments[0];
         if (right.arguments.length !== 1) throw heneError('ERR_NODE_SINGLE_ARG', right);
         if (!arg || arg.type !== 'Literal') throw heneError('ERR_NODE_STRING_LITERAL', arg || right);
-        recordNodeRef(arg.value, parts, tracker);
+        recordNodeRef(arg.value, parts, tracker, left);
         assignExpr.right = { type: 'Literal', value: null };
         return parts;
     } else if (right.type === 'ObjectExpression') {

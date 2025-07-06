@@ -28,8 +28,8 @@
     "hint": "Check that the node name matches an element's node attribute"
   },
   "ERR_EVENT_ARG_COUNT": {
-    "message": "$event requires three arguments",
-    "hint": "Use $event(type, handler, options)"
+    "message": "$event must receive at least two arguments: type and handler",
+    "hint": "Use $event(eventType, handler, options?)"
   },
   "ERR_EVENT_ARG_TYPES": {
     "message": "Invalid $event argument types",

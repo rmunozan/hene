@@ -5,7 +5,7 @@ const messages = JSON.parse(
 );
 
 function codeFrame(code, line, column) {
-  const lines = code.split('\n');
+  const lines = code.split('\n').map(l => l.replace(/\t/g, '    '));
   const start = Math.max(0, line - 2);
   const end = Math.min(lines.length, line + 1);
   let frame = '';
@@ -48,8 +48,12 @@ export function reportError(error, code, pluginCtx, id) {
   const loc = error.loc && code
     ? { line: error.loc.line, column: error.loc.column, file: id }
     : undefined;
-  const frame = error.loc && code ? codeFrame(code, error.loc.line, error.loc.column) : undefined;
-  const msg = `${prefix} ${error.message}${error.hint ? `\nHint: ${error.hint}` : ''}`;
+  const frame = error.loc && code
+    ? codeFrame(code, error.loc.line, error.loc.column)
+    : undefined;
+  const parts = ['\n' + prefix, error.message];
+  if (error.hint) parts.push(error.hint);
+  const msg = parts.join('\n');
 
   if (pluginCtx && typeof pluginCtx.error === 'function') {
     pluginCtx.error({ id, message: msg, loc, frame });

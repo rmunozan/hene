@@ -1,4 +1,4 @@
-export function makeMemberAst(parts) {
+export function makeMemberAst(parts, loc) {
     let expr = parts[0] === 'this'
         ? { type: 'ThisExpression' }
         : { type: 'Identifier', name: parts[0] };
@@ -10,5 +10,6 @@ export function makeMemberAst(parts) {
             computed: false
         };
     }
+    if (loc) expr.loc = loc;
     return expr;
 }
