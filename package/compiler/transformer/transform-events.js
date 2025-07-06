@@ -4,6 +4,7 @@
  * Provides utilities for handling `$event` calls within component classes.
  */
 import { heneError } from '../utils/errors/error.js';
+import { partsFromMember } from '../utils/ast/ast-inspector.js';
 
 /**
  * Processes `$event` calls in class members, hoists inline listeners,
@@ -16,7 +17,7 @@ import { heneError } from '../utils/errors/error.js';
  * @param {object} eventIdCounter - Counter for unique event handler names.
  * @param {Array<Object>} hoistedHandlerStmts - Collector for hoisted handler assignments.
  */
-export function processEventListeners(classMembers, constructorNode, connectedCbNode, disconnectedCbNode, eventIdCounter, hoistedHandlerStmts) {
+export function processEventListeners(classMembers, constructorNode, connectedCbNode, disconnectedCbNode, nodeTracker, eventIdCounter, hoistedHandlerStmts) {
         const collectedEventListeners = [];
         const classMethodNames = new Set();
         for (const m of classMembers) {
@@ -54,15 +55,23 @@ export function processEventListeners(classMembers, constructorNode, connectedCb
                     stmt.expression.callee.property.name === '$event'
                 ) {
                     const callExpr = stmt.expression;
-                    if (callExpr.arguments.length < 2 || callExpr.arguments.length > 3) {
-                         // console.warn(`[Hene] Invalid $event arguments at ...`);
-                         continue;
+                    if (callExpr.arguments.length !== 3) {
+                        throw heneError('ERR_EVENT_ARG_COUNT', callExpr);
                     }
-    
+
                     const eventTargetAST = callExpr.callee.object;
+                    const targetParts = partsFromMember(eventTargetAST);
+                    if (!targetParts || !nodeTracker.paths.has(targetParts.join('.'))) {
+                        throw heneError('ERR_EVENT_NODE_TARGET', callExpr);
+                    }
+
                     const eventTypeAST = callExpr.arguments[0];
                     let listenerAST = callExpr.arguments[1];
-                    const optionsAST = callExpr.arguments[2] || null;
+                    const optionsAST = callExpr.arguments[2];
+
+                    if (eventTypeAST.type !== 'Literal' || typeof eventTypeAST.value !== 'string' || !listenerAST) {
+                        throw heneError('ERR_EVENT_ARG_TYPES', callExpr);
+                    }
     
                     let finalListenerAST = listenerAST;
                     let hoistedName = null;
@@ -160,7 +169,7 @@ export function processEventListeners(classMembers, constructorNode, connectedCb
                     };
     
                     if (bodyStmts !== connectedCbNode.value.body.body) {
-                        throw heneError('ERR_EVENT_CONNECTED_ONLY');
+                        throw heneError('ERR_EVENT_CONNECTED_ONLY', stmt);
                     }
                     bodyStmts[i] = addEvtStmt;
     
@@ -226,7 +235,7 @@ export function transformEvents(context) {
     const connectedCb = context.analysis.connectedCb;
     const disconnectedCb = context.analysis.disconnectedCb;
     const hoisted = [];
-    processEventListeners(classNode.body.body, ctor, connectedCb, disconnectedCb, { count: 0 }, hoisted);
+    processEventListeners(classNode.body.body, ctor, connectedCb, disconnectedCb, context.analysis.nodeTracker, { count: 0 }, hoisted);
     if (ctor) ctor.value.body.body.push(...hoisted);
 }
 

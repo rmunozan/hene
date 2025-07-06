@@ -1,5 +1,6 @@
 // hene/compiler/analyzer/analyze-state.js
 import { makeMemberAst } from "../utils/ast/ast-builder.js";
+import { heneError } from "../utils/errors/error.js";
 
 export function createStateMap() { return new Map(); }
 export function recordState(parts, map) {
@@ -12,6 +13,7 @@ export function collectStatesFromObject(objExpr, baseParts, map) {
         const val = prop.value;
         const newParts = baseParts.concat(prop.key.name);
         if (val.type === 'CallExpression' && val.callee.type === 'Identifier' && val.callee.name === '$state') {
+            if (val.arguments.length === 0) throw heneError('ERR_STATE_ARG', val);
             recordState(newParts, map);
         } else if (val.type === 'ObjectExpression') {
             collectStatesFromObject(val, newParts, map);
@@ -33,6 +35,7 @@ export function inspectStateAssignment(assignExpr, map) {
     else if (cur.type === 'Identifier') parts.unshift(cur.name); else return;
 
     if (right.type === 'CallExpression' && right.callee.type === 'Identifier' && right.callee.name === '$state') {
+        if (right.arguments.length === 0) throw heneError('ERR_STATE_ARG', right);
         recordState(parts, map);
     } else if (right.type === 'ObjectExpression') {
         collectStatesFromObject(right, parts, map);

@@ -3,6 +3,23 @@ import { readFileSync } from 'fs';
 const messages = JSON.parse(
   readFileSync(new URL('./error-messages.json', import.meta.url), 'utf8')
 );
+
+function codeFrame(code, line, column) {
+  const lines = code.split('\n');
+  const start = Math.max(0, line - 2);
+  const end = Math.min(lines.length, line + 1);
+  let frame = '';
+  for (let i = start; i < end; i++) {
+    const l = i + 1;
+    const prefix = l === line ? '>' : ' ';
+    const num = String(l).padStart(4);
+    frame += `${prefix} ${num} | ${lines[i]}\n`;
+    if (l === line) {
+      frame += `    ${' '.repeat(column)}^\n`;
+    }
+  }
+  return frame;
+}
 /**
  * @fileoverview Helper utilities for compiler error creation and reporting.
  */
@@ -12,9 +29,13 @@ const messages = JSON.parse(
  * @param {string} msg
  * @returns {Error}
  */
-export function heneError(code) {
-  const msg = messages[code] || code;
-  return new Error(`[Hene] ${msg}`);
+export function heneError(code, node) {
+  const entry = messages[code] || { message: code };
+  const error = new Error(entry.message);
+  error.id = code;
+  if (entry.hint) error.hint = entry.hint;
+  if (node?.loc) error.loc = node.loc.start || node.loc;
+  return error;
 }
 
 /**
@@ -22,21 +43,18 @@ export function heneError(code) {
  * @param {Error} error
  * @param {string} [code]
  */
-export function reportError(error, code) {
-  console.error(`[Hene] ${error.message}`);
-  if (error.loc && code) {
-    const { line, column } = error.loc;
-    const lines = code.split('\n');
-    const start = Math.max(0, line - 3);
-    const end = Math.min(lines.length, line + 2);
-    console.error(`Error at line ${line}, column ${column}:`);
-    for (let i = start; i < end; i++) {
-      console.error(`${i + 1}: ${lines[i]}`);
-      if (i === line - 1) {
-        console.error(' '.repeat(String(i + 1).length + 2 + column) + '^');
-      }
-    }
-  } else if (error.stack) {
-    console.error(error.stack);
+export function reportError(error, code, pluginCtx, id) {
+  const prefix = `[Hene ${error.id || ''}]`;
+  const loc = error.loc && code
+    ? { line: error.loc.line, column: error.loc.column, file: id }
+    : undefined;
+  const frame = error.loc && code ? codeFrame(code, error.loc.line, error.loc.column) : undefined;
+  const msg = `${prefix} ${error.message}${error.hint ? `\nHint: ${error.hint}` : ''}`;
+
+  if (pluginCtx && typeof pluginCtx.error === 'function') {
+    pluginCtx.error({ id, message: msg, loc, frame });
+  } else {
+    console.error(msg);
+    if (frame) console.error(frame);
   }
 }

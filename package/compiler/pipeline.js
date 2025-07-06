@@ -34,11 +34,13 @@ import { reportError } from './utils/errors/error.js';
  * @param {string} sourceCode The original JavaScript source code.
  * @returns {string} The transformed JavaScript code.
  */
-export function runPipeline(sourceCode) {
+export function runPipeline(sourceCode, opts = {}) {
     if (!sourceCode) return '';
 
     // Initialize the shared context for this entire compilation run.
     const context = new Context(sourceCode);
+    const pluginCtx = opts.pluginCtx;
+    const id = opts.id;
 
     try {
         // STAGE 1: PARSING
@@ -64,7 +66,7 @@ export function runPipeline(sourceCode) {
         generateJavaScript(context);
 
     } catch (e) {
-        reportError(e, context.sourceCode);
+        reportError(e, context.sourceCode, pluginCtx, id);
     }
 
     // Return the final code from the context.

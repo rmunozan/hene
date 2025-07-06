@@ -17,13 +17,13 @@ class EventsCases extends HeneElement {
 
   connectedCallback() {
     // Bound method
-    this.btn.$event('click', this.handleClick);
+    this.btn.$event('click', this.handleClick, {});
 
     // Inline arrow
-    this.btn.$event('mouseover', e => console.log('hover', e));
+    this.btn.$event('mouseover', e => console.log('hover', e), {});
 
     // Arrow property
-    this.box.$event('mousemove', this.handleMove);
+    this.box.$event('mousemove', this.handleMove, {});
   }
 
   $render = `

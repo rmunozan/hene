@@ -9,6 +9,7 @@
 import { parseHTMLString } from '../parser/html-parser.js';
 import * as acorn from 'acorn';
 import { generate } from "astring";
+import { heneError } from '../utils/errors/error.js';
 function extractRenderHTML(classBody) {
     if (!classBody) return null;
     let html = null;
@@ -362,6 +363,12 @@ function generateDomASTForNode(node, parentVar, stmts, idCounter, nodeMap, watch
 export function processRender(html, reactiveStates, nodeRefs) {
     const { creation_statements, node_map, sync_watchers } = buildDomInstructionsAST(html, reactiveStates);
     const stmts = [...creation_statements];
+
+    for (const [name, refs] of nodeRefs.entries()) {
+        if (!node_map[name]) {
+            throw heneError('ERR_NODE_NOT_FOUND', refs[0]);
+        }
+    }
 
     Object.entries(node_map).forEach(([name, varName]) => {
         const refs = nodeRefs.get(name);

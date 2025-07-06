@@ -5,8 +5,8 @@
  */
 import { runPipeline } from './pipeline.js';
 
-export function compile(code) {
-    return runPipeline(code);
+export function compile(code, opts = {}) {
+    return runPipeline(code, opts);
 }
 
 export function heneCompiler() {
@@ -17,7 +17,7 @@ export function heneCompiler() {
       if (!/\.[jt]sx?$/.test(id)) return null;
       // Only match class declarations that extend HeneElement
       if (!/\bclass\s+\w+\s+extends\s+HeneElement\b/.test(code)) return null;
-      const out = compile(code);
+      const out = compile(code, { pluginCtx: this, id });
       console.log('\nCompiled output for', id, '\n', out);
       return { code: out, map: null };
     }

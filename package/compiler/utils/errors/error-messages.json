@@ -1,5 +1,58 @@
 {
-  "ERR_NODE_STRING_LITERAL": "$node() requires a string literal",
-  "ERR_NODE_CONSTRUCTOR_ONLY": "$node() can only be used inside the constructor",
-  "ERR_EVENT_CONNECTED_ONLY": "$event() can only be used inside connectedCallback"
+  "ERR_NODE_STRING_LITERAL": {
+    "message": "$node expects a single string argument",
+    "hint": "Pass one string identifier to $node(e.g. $node('btn'))"
+  },
+  "ERR_NODE_CONSTRUCTOR_ONLY": {
+    "message": "$node can only be declared inside the constructor",
+    "hint": "Move this call into your component's constructor"
+  },
+  "ERR_EVENT_CONNECTED_ONLY": {
+    "message": "$event can only be used inside connectedCallback",
+    "hint": "Attach events in connectedCallback"
+  },
+  "ERR_EVENT_ARGS": {
+    "message": "$event requires event type and handler",
+    "hint": "Use $event(type, handler, options?)"
+  },
+  "ERR_NODE_SINGLE_ARG": {
+    "message": "$node must receive exactly one argument",
+    "hint": "Provide a single string identifier"
+  },
+  "ERR_NODE_ACCESS_IN_CONSTRUCTOR": {
+    "message": "$node declarations may not be read inside the constructor",
+    "hint": "Access node references after connectedCallback"
+  },
+  "ERR_NODE_NOT_FOUND": {
+    "message": "Referenced node was not found in $render HTML",
+    "hint": "Check that the node name matches an element's node attribute"
+  },
+  "ERR_EVENT_ARG_COUNT": {
+    "message": "$event requires three arguments",
+    "hint": "Use $event(type, handler, options)"
+  },
+  "ERR_EVENT_ARG_TYPES": {
+    "message": "Invalid $event argument types",
+    "hint": "Use a string event type and a callback method"
+  },
+  "ERR_EVENT_NODE_TARGET": {
+    "message": "$event can only be attached to $node instances",
+    "hint": "Call $event on variables declared with $node"
+  },
+  "ERR_RENDER_CALLED": {
+    "message": "$render cannot be invoked as a function",
+    "hint": "Remove any $render() calls"
+  },
+  "ERR_RENDER_EMPTY": {
+    "message": "$render cannot be empty",
+    "hint": "Provide HTML content inside $render"
+  },
+  "ERR_RENDER_STRING": {
+    "message": "$render must return a string",
+    "hint": "Return HTML text or a template literal"
+  },
+  "ERR_STATE_ARG": {
+    "message": "$state requires an initial value",
+    "hint": "Pass a default value to $state"
+  }
 }

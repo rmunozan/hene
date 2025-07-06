@@ -17,9 +17,9 @@ class EventsCases extends HTMLElement {
       this.__build();
       this.__built = true;
     }
-    this.btn.addEventListener('click', this._e1, false);
-    this.btn.addEventListener('mouseover', this._e0, false);
-    this.box.addEventListener('mousemove', this.handleMove, false);
+    this.btn.addEventListener('click', this._e1, {});
+    this.btn.addEventListener('mouseover', this._e0, {});
+    this.box.addEventListener('mousemove', this.handleMove, {});
     this.appendChild(this._root);
   }
   disconnectedCallback() {
