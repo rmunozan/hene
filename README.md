@@ -4,7 +4,6 @@ A tiny compiler for building web components in plain JavaScript. Hene offers a f
 
 It offers 4 minimal abstractions and nothing more. Your code stays simple, transparent, and predictable.
 
----
 
 ## Principles
 
@@ -14,7 +13,6 @@ It offers 4 minimal abstractions and nothing more. Your code stays simple, trans
 - **Explicit**  
   What you write is exactly what you get in the browser.
 
----
 
 ## Core Abstractions
 
@@ -32,7 +30,6 @@ Learn more in [doc/README.md](doc/README.md).
 - **`$render`**  
   Define your component’s HTML structure as a simple template that Hene uses to build the DOM.
 
----
 
 ## Quick Start
 

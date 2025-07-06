@@ -1,12 +1,8 @@
-==================================
- Hene: The Comprehensive Guide
-==================================
+# Hene: The Comprehensive Guide
 
 This document provides a detailed explanation of Hene, its abstractions, and its compilation process. It is intended for developers or AI models to gain a complete understanding of how to author Hene components.
 
-----------------------------------
-Part 1: Core Concepts
-----------------------------------
+## Part 1: Core Concepts
 
 Hene is a compiler, not a runtime framework. It reads your component's source code and outputs a new version of the code that uses standard browser APIs.
 
@@ -38,9 +34,7 @@ Hene hooks into the standard Web Component lifecycle callbacks. The compiler wil
 - **`connectedCallback()`**: Called when the component is added to the DOM. Hene uses this to build the component's DOM structure (once) and attach event listeners.
 - **`disconnectedCallback()`**: Called when the component is removed from the DOM. Hene uses this to clean up event listeners and state watchers to prevent memory leaks.
 
-----------------------------------
-Part 2: The `$render` Abstraction
-----------------------------------
+## Part 2: The `$render` Abstraction
 
 **Purpose:** To declaratively define your component's HTML structure without writing manual DOM creation calls.
 
@@ -120,9 +114,7 @@ class RenderCases extends HTMLElement {
 }
 ```
 
-----------------------------------
-Part 3: The `$state` Abstraction
-----------------------------------
+## Part 3: The `$state` Abstraction
 
 **Purpose:** To create reactive values ("signals") that automatically update the DOM when they change.
 
@@ -205,9 +197,7 @@ class StateCases extends HTMLElement {
 }
 ```
 
-----------------------------------
-Part 4: The `$node` Abstraction
-----------------------------------
+## Part 4: The `$node` Abstraction
 
 **Purpose:** To get a direct reference to a specific DOM element from your `$render` template for imperative manipulation.
 
@@ -281,9 +271,7 @@ class NodesCases extends HTMLElement {
 ```
 *Note: The generated code may have redundant assignments as an artifact of the AST transformation process, but this is functionally harmless.*
 
-----------------------------------
-Part 5: The `$event` Abstraction
-----------------------------------
+## Part 5: The `$event` Abstraction
 
 **Purpose:** A safe and convenient way to add event listeners to elements referenced by `$node`, with automatic cleanup.
 
@@ -367,8 +355,6 @@ class EventsCases extends HTMLElement {
 }
 ```
 
-----------------------------------
-Part 6: Conclusion
-----------------------------------
+## Part 6: Conclusion
 
 Hene is a tool for writing Web Components with less boilerplate and more safety. It achieves this by taking your declarative code and transforming it into the efficient, imperative, and standards-compliant vanilla JavaScript that the browser understands best. By understanding these four transformations, you understand all of Hene.
