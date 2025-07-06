@@ -33,7 +33,7 @@
   },
   "ERR_EVENT_ARG_TYPES": {
     "message": "Invalid $event argument types",
-    "hint": "Use a string event type and a callback method"
+    "hint": "Use $event(stringType, methodHandler, options?)"
   },
   "ERR_EVENT_NODE_TARGET": {
     "message": "$event can only be attached to $node instances",

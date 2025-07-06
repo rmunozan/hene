@@ -69,7 +69,15 @@ export function processEventListeners(classMembers, constructorNode, connectedCb
                     let listenerAST = callExpr.arguments[1];
                     const optionsAST = callExpr.arguments[2];
 
-                    if (eventTypeAST.type !== 'Literal' || typeof eventTypeAST.value !== 'string' || !listenerAST) {
+                    const typeOk = eventTypeAST.type === 'Literal' && typeof eventTypeAST.value === 'string';
+                    const handlerOk =
+                        listenerAST && (
+                            (listenerAST.type === 'MemberExpression' && listenerAST.object.type === 'ThisExpression') ||
+                            listenerAST.type === 'ArrowFunctionExpression' ||
+                            listenerAST.type === 'FunctionExpression'
+                        );
+                    const optsOk = !optionsAST || optionsAST.type === 'ObjectExpression';
+                    if (!typeOk || !handlerOk || !optsOk) {
                         throw heneError('ERR_EVENT_ARG_TYPES', callExpr);
                     }
     

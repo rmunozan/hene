@@ -14,9 +14,6 @@ function codeFrame(code, line, column) {
     const prefix = l === line ? '>' : ' ';
     const num = String(l).padStart(4);
     frame += `${prefix} ${num} | ${lines[i]}\n`;
-    if (l === line) {
-      frame += `    ${' '.repeat(column)}^\n`;
-    }
   }
   return frame;
 }
