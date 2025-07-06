@@ -1,0 +1,14 @@
+{
+  "name": "Hene sample",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0",
+    "hene": "^0.0.0"
+  }
+}
