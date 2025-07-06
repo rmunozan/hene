@@ -18,7 +18,6 @@ export function heneCompiler() {
       // Only match class declarations that extend HeneElement
       if (!/\bclass\s+\w+\s+extends\s+HeneElement\b/.test(code)) return null;
       const out = compile(code, { pluginCtx: this, id });
-      console.log('\nCompiled output for', id, '\n', out);
       return { code: out, map: null };
     }
   };
