@@ -1,4 +1,6 @@
-// hene/compiler/utils/error.js
+/**
+ * @fileoverview Helper utilities for compiler error creation and reporting.
+ */
 import { readFileSync } from 'fs';
 const messages = JSON.parse(
   readFileSync(new URL('./error-messages.json', import.meta.url), 'utf8')
@@ -17,9 +19,6 @@ function codeFrame(code, line, column) {
   }
   return frame;
 }
-/**
- * @fileoverview Helper utilities for compiler error creation and reporting.
- */
 
 /**
  * Create a compile-time error with standardized prefix.

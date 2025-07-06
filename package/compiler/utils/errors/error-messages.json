@@ -1,58 +1,58 @@
 {
   "ERR_NODE_STRING_LITERAL": {
-    "message": "$node expects a single string argument",
-    "hint": "Pass one string identifier to $node(e.g. $node('btn'))"
+    "message": "$node expects one string identifier argument; received none or non‑string.",
+    "hint": "Call as $node(id: string)."
   },
   "ERR_NODE_CONSTRUCTOR_ONLY": {
-    "message": "$node can only be declared inside the constructor",
-    "hint": "Move this call into your component's constructor"
+    "message": "$node must be declared inside the constructor; other scopes run too early.",
+    "hint": "Move the $node call to the class constructor."
   },
   "ERR_EVENT_CONNECTED_ONLY": {
-    "message": "$event can only be used inside connectedCallback",
-    "hint": "Attach events in connectedCallback"
+    "message": "$event can run only in connectedCallback; the element must be in the DOM first.",
+    "hint": "Attach events inside connectedCallback with $event(type: string, handler: function, options?: object)."
   },
   "ERR_EVENT_ARGS": {
-    "message": "$event requires event type and handler",
-    "hint": "Use $event(type, handler, options?)"
+    "message": "$event requires an event type and a handler function.",
+    "hint": "Use $event(type: string, handler: function, options?: object)."
   },
   "ERR_NODE_SINGLE_ARG": {
-    "message": "$node must receive exactly one argument",
-    "hint": "Provide a single string identifier"
+    "message": "$node must receive exactly one argument.",
+    "hint": "Provide a single id: $node(id: string)."
   },
   "ERR_NODE_ACCESS_IN_CONSTRUCTOR": {
-    "message": "$node declarations may not be read inside the constructor",
-    "hint": "Access node references after connectedCallback"
+    "message": "Reading $node references inside the constructor is premature; nodes are populated later.",
+    "hint": "Access node references after connectedCallback."
   },
   "ERR_NODE_NOT_FOUND": {
-    "message": "Referenced node was not found in $render HTML",
-    "hint": "Check that the node name matches an element's node attribute"
+    "message": "The node name referenced with $node is missing from the $render HTML.",
+    "hint": "Ensure the node attribute matches an element rendered by $render."
   },
   "ERR_EVENT_ARG_COUNT": {
-    "message": "$event must receive at least two arguments: type and handler",
-    "hint": "Use $event(eventType, handler, options?)"
+    "message": "$event needs at least two arguments: type and handler.",
+    "hint": "Call $event(type: string, handler: function, options?: object)."
   },
   "ERR_EVENT_ARG_TYPES": {
-    "message": "Invalid $event argument types",
-    "hint": "Use $event(stringType, methodHandler, options?)"
+    "message": "Invalid argument types in $event",
+    "hint": "Call $event(type: string, handler: function, options?: object)."
   },
   "ERR_EVENT_NODE_TARGET": {
-    "message": "$event can only be attached to $node instances",
-    "hint": "Call $event on variables declared with $node"
+    "message": "$event can only be attached to variables created with $node.",
+    "hint": "Invoke $event on references returned by $node."
   },
   "ERR_RENDER_CALLED": {
-    "message": "$render cannot be invoked as a function",
-    "hint": "Remove any $render() calls"
+    "message": "$render is not callable; treat it as a property.",
+    "hint": "Remove any $render() calls."
   },
   "ERR_RENDER_EMPTY": {
-    "message": "$render cannot be empty",
-    "hint": "Provide HTML content inside $render"
+    "message": "$render cannot be empty.",
+    "hint": "Return non‑empty HTML."
   },
   "ERR_RENDER_STRING": {
-    "message": "$render must return a string",
-    "hint": "Return HTML text or a template literal"
+    "message": "$render must return a string or template literal.",
+    "hint": "Return HTML as a string or template literal."
   },
   "ERR_STATE_ARG": {
-    "message": "$state requires an initial value",
-    "hint": "Pass a default value to $state"
+    "message": "$state requires an initial value.",
+    "hint": "Pass a default: $state(initial: any)."
   }
 }

@@ -1,10 +1,10 @@
 import { $state } from "hene";
 
 class Counter extends HeneElement {
-        constructor() {
-                this.count = $state(0);
-                this.button = $node('btn', 'extra');
-        }
+	constructor() {
+		this.count = $state(0);
+		this.button = $node('btn');
+	}
 
 	connectedCallback() {
 		this.button.$event('click', () => this.count(this.count() + 1));
