@@ -56,4 +56,4 @@ Learn more in [doc/README.md](doc/README.md).
 
 ---
 
-That’s it—four clear, straightforward tools for building web components without surprises. Hene does just enough to keep your code tidy, then lets you control the rest.
+That’s it, four clear, straightforward tools for building web components without surprises. Hene does just enough to keep your code tidy, then lets you control the rest.
